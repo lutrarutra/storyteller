@@ -49,6 +49,11 @@ class _Collector(HTMLParser):
             self._check_css(values["style"], f"style attribute of <{tag}>")
         if values.get("data-missing"):
             self.problems.append(f"image {values['data-missing']!r} was not found when the report was built")
+        if values.get("data-cf-missing-ref"):
+            self.problems.append(
+                f"link [](#{values['data-cf-missing-ref']}) leads nowhere: no block has that key, "
+                "or the block has no number or title to show (give the link text)"
+            )
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "style":

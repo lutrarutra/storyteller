@@ -11,6 +11,13 @@ code flower's sandbox agent uses it to write its reports; it works anywhere Pyth
 - **Interactive where it helps.** Plotly charts, and explorers that link thresholds and
   filters to histograms, scatter plots and live counts. Each one also has a static snapshot
   for viewers that block scripts.
+- **Cross-references.** `[](#key)` in text links to the figure, table or section with that
+  key and reads "Figure 3"; the numbers stay right as sections are added, and the links
+  work in the PDF.
+- **Comments.** Readers select text, right-click and comment: a note for other readers, or
+  a request for the agent. The comments are saved in the report, survive rebuilds, and
+  stay with the words they are about as the report changes. The agent reads and resolves
+  them with `storyteller comments`.
 - **Prints well.** A4 or Letter pages with margins, page numbers and charts sized to the page.
   On wide screens the report stays a centred page with margins around it.
 - **Small.** Images are resized and encoded losslessly or lossily by content, and a size
@@ -55,7 +62,10 @@ storyteller finalize reports/pbmc     final version: no draft marks, size budget
 storyteller remove   reports/pbmc KEY
 storyteller check    FILE.html        self-contained? small enough for VS Code (10 MB)?
 storyteller pdf      FILE.html        print with headless Chromium
-storyteller serve    reports/pbmc     live view in a browser on 127.0.0.1
+storyteller serve    reports/pbmc     live view in a browser on 127.0.0.1 (saves comments)
+storyteller comments list reports/pbmc         readers' open comments (--all, --json)
+storyteller comments reply|resolve reports/pbmc ID [MESSAGE]
+storyteller comments import reports/pbmc COPY.html   comments from a copy a reader saved
 storyteller palette | demo
 ```
 
@@ -80,6 +90,7 @@ npm ci && npm test                       # runtime.js unit tests
 npx playwright-core install chromium     # once
 storyteller demo -o /tmp/demo.html && npm run e2e -- /tmp/demo.html /tmp/e2e
 node tests/e2e/check_live.mjs "$(which python)" /tmp/live
+node tests/e2e/check_comments.mjs "$(which python)" /tmp/comments
 npm run vendor:check                     # vendored JS and fonts match VERSIONS.json
 ```
 

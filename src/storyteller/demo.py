@@ -54,7 +54,8 @@ def build(path: Path) -> Path:
     keep = (cells.n_genes >= 500) & (cells.pct_mt <= 15)
     report.summary(
         f"**{keep.sum():,} of {len(cells):,} cells** pass QC (genes ≥ 500, mitochondrial reads ≤ 15 %). "
-        "Donor B has a slightly higher mitochondrial fraction; the thresholds are worth a look below."
+        "Donor B has a slightly higher mitochondrial fraction ([](#mt-per-donor)); "
+        "the thresholds are worth a look in [](#qc). [](#cell-types) lists the cell types that remain."
     )
     report.metrics(
         [
@@ -93,8 +94,26 @@ def build(path: Path) -> Path:
             ax.axvline(15, color="#1d1d1f", linestyle="--", linewidth=1)
             ax.set_title(name)
             ax.set_xlabel("% mitochondrial reads")
-        report.figure(figure, caption="Mitochondrial fraction per donor; the dashed line is the cut-off.")
-        report.callout("warning", "Donor B's mitochondrial fraction is about one point higher across the board.")
+        report.figure(
+            figure, caption="Mitochondrial fraction per donor; the dashed line is the cut-off.", key="mt-per-donor"
+        )
+        report.callout(
+            "warning",
+            "Donor B's mitochondrial fraction is about one point higher across the board ([](#mt-per-donor)), "
+            "and so is its gene count ([genes per cell, donor B](#genes-donor-b)).",
+        )
+        with report.tabs():
+            for name in ["donor A", "donor B"]:
+                with report.tab(name):
+                    figure, ax = plt.subplots(figsize=(7, 2.8))
+                    ax.hist(
+                        np.log10(cells[cells["sample"] == name].n_genes), bins=60, color=sty.palette.categorical(1)[0]
+                    )
+                    ax.axvline(np.log10(500), color="#1d1d1f", linestyle="--", linewidth=1)
+                    ax.set_xlabel("log10 genes per cell")
+                    report.figure(
+                        figure, caption=f"Genes per cell, {name}.", key=f"genes-{name.replace(' ', '-').lower()}"
+                    )
 
     with report.section("composition", "Cell type composition"):
         table = (
@@ -108,7 +127,11 @@ def build(path: Path) -> Path:
         table["share"] = table["total"] / table["total"].sum()
         with report.grid(2):
             report.table(
-                table, caption="Cells per type after QC.", format={"share": "{:.1%}"}, flags=table["share"] < 0.05
+                table,
+                caption="Cells per type after QC.",
+                format={"share": "{:.1%}"},
+                flags=table["share"] < 0.05,
+                key="cell-types",
             )
             figure, ax = plt.subplots(figsize=(4.2, 3.4))
             shares = table["share"].sort_values()
@@ -135,7 +158,7 @@ def build(path: Path) -> Path:
     with report.section("methods", "Methods"):
         report.text(
             "Cells were filtered on genes per cell and mitochondrial fraction. "
-            "Thresholds follow the distribution shapes above; doublets were not removed in this demo."
+            "Thresholds follow the distribution shapes in [](#qc); doublets were not removed in this demo."
         )
         report.code(
             "import scanpy as sc\nsc.pp.filter_cells(adata, min_genes=500)\nadata = adata[adata.obs.pct_counts_mt < 15]",

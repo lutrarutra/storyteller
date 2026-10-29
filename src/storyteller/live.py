@@ -5,17 +5,25 @@ and an event stream (Server-Sent Events) that announces each new version; the
 page's runtime then fetches it and patches only the changed sections, keeping
 scroll position and explorer settings. Inside code flower's sandbox the VS Code
 preview does the same without a server; this is for running elsewhere.
+
+Comments the reader leaves in the page come back as a POST to /comments and are
+saved into the report (see comments.py).
 """
 
 from __future__ import annotations
 
+import json
 import threading
 import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from . import comments
+
 EVENTS_PATH = "/events"
+COMMENTS_PATH = "/comments"
+MAX_COMMENTS_BYTES = 2 * 1024 * 1024
 POLL_S = 0.5
 LIVE_META = f'<meta name="cf-live" content="{EVENTS_PATH}">'
 
@@ -62,6 +70,33 @@ def serve(html_path: Path, host: str = "127.0.0.1", port: int = 8765) -> None:
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_POST(self) -> None:  # noqa: N802 - http.server API
+            if self.path.split("?")[0] != COMMENTS_PATH:
+                self.send_error(HTTPStatus.NOT_FOUND)
+                return
+            # Only this page may write: a JSON body needs a CORS preflight from other sites,
+            # which this server never grants, and a browser names the origin of any POST.
+            origin = self.headers.get("Origin")
+            same = origin is None or origin == f"http://{self.headers.get('Host')}"
+            if not same or self.headers.get_content_type() != "application/json":
+                self.send_error(HTTPStatus.FORBIDDEN)
+                return
+            length = int(self.headers.get("Content-Length") or 0)
+            if not 0 < length <= MAX_COMMENTS_BYTES:
+                self.send_error(HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+                return
+            try:
+                saved = comments.save(html_path, json.loads(self.rfile.read(length)))
+            except (ValueError, FileNotFoundError) as error:
+                self.send_error(HTTPStatus.BAD_REQUEST, str(error))
+                return
+            body = json.dumps({"saved": len(saved)}).encode("utf-8")
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)

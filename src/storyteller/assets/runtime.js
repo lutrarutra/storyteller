@@ -194,6 +194,10 @@
     return out;
   }
 
+  function toggleTheme(current) {
+    return current === 'light' ? 'dark' : 'light';
+  }
+
   const helpers = {
     columnViews,
     computeMasks,
@@ -204,7 +208,8 @@
     permutation,
     sampleIndices,
     settingsFor,
-    merge
+    merge,
+    toggleTheme
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = helpers;
   if (typeof document === 'undefined') return;
@@ -250,7 +255,7 @@
     if (choice === 'light' || choice === 'dark') root.dataset.theme = choice;
     else delete root.dataset.theme;
     const button = root.querySelector('[data-cf-action="theme"]');
-    if (button) button.dataset.state = choice || 'auto';
+    if (button) button.dataset.state = choice || mode();
     redrawAll();
   }
 
@@ -846,6 +851,23 @@
     }
   }
 
+  // -- cross-references --------------------------------------------------------------------
+
+  /** Opens the tabs around a link target so the browser can scroll to it, and flashes it. */
+  function reveal(id) {
+    const target = id && document.getElementById(id);
+    if (!target || !root.contains(target)) return;
+    for (let panel = target.closest('.cf-tab-panel'); panel; panel = panel.parentElement.closest('.cf-tab-panel')) {
+      const index = [...panel.parentElement.children].indexOf(panel);
+      const radio = panel.closest('.cf-tabs').querySelectorAll(':scope > input')[index];
+      if (radio) radio.checked = true;
+    }
+    target.classList.remove('cf-changed');
+    void target.offsetWidth; // restart the animation
+    target.classList.add('cf-changed');
+    setTimeout(() => target.classList.remove('cf-changed'), 2400);
+  }
+
   // -- live updates ------------------------------------------------------------------------
 
   /** Replaces the parts of the page whose content hash changed; keeps the rest (plots, settings, scroll). */
@@ -885,13 +907,14 @@
         element.remove();
       }
     }
-    for (const id of ['cf-theme']) {
+    for (const id of ['cf-theme', 'cf-comments']) {
       const fresh = next.getElementById(id);
       const old = document.getElementById(id);
       if (fresh && old) old.textContent = fresh.textContent;
     }
     document.title = next.title;
     setupToc();
+    global.cfComments?.refresh(); // highlights again, in the new text
     return true;
   }
 
@@ -916,14 +939,13 @@
   // -- start -------------------------------------------------------------------------------
 
   applyTheme(storage('get'));
-  prefersDark?.addEventListener?.('change', () => !root.dataset.theme && redrawAll());
+  prefersDark?.addEventListener?.('change', () => !root.dataset.theme && applyTheme(null));
   root.addEventListener('click', (event) => {
     const action = event.target.closest('[data-cf-action]');
     if (action && action.dataset.cfAction === 'theme') {
-      const order = ['auto', 'light', 'dark'];
-      const next = order[(order.indexOf(action.dataset.state || 'auto') + 1) % order.length];
-      storage('set', next === 'auto' ? null : next);
-      applyTheme(next === 'auto' ? null : next);
+      const next = toggleTheme(mode());
+      storage('set', next);
+      applyTheme(next);
       return;
     }
     if (action && action.dataset.cfAction === 'print') {
@@ -935,6 +957,12 @@
       sortTable(header);
       return;
     }
+    const ref = event.target.closest('a.cf-ref[href^="#"]');
+    if (ref) {
+      // Before the browser follows the link, so it can scroll to a block in a closed tab.
+      reveal(decodeURIComponent(ref.getAttribute('href').slice(1)));
+      return;
+    }
     const image = event.target.closest('.cf-figure img');
     if (image && typeof HTMLDialogElement !== 'undefined') openLightbox(image);
   });
@@ -944,5 +972,9 @@
   init(document);
   setupToc();
   listenForUpdates();
+  if (location.hash.length > 1) {
+    reveal(decodeURIComponent(location.hash.slice(1)));
+    document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
+  }
   global.cfReport = { patch, settings: () => [...explorers.values()].map((s) => settingsFor(s.spec.controls, s.settings)) };
 })(typeof window !== 'undefined' ? window : globalThis);

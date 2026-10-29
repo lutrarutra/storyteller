@@ -1,3 +1,4 @@
+import base64
 import json
 import re
 import subprocess
@@ -12,6 +13,7 @@ import storyteller as sty
 from storyteller import check
 from storyteller.interactive import explorer as ex
 from storyteller.interactive import pack
+from storyteller.render import asset_bytes
 
 
 def _sections(html: str) -> list[str]:
@@ -32,6 +34,22 @@ def test_in_memory_report_is_self_contained_and_final(tmp_path):
     assert _sections(html) == ["data"]
 
 
+def test_footer_links_to_storyteller_github_without_interactive_label():
+    html = sty.Report("x").render()
+    footer = re.search(r"<footer\b.*?</footer>", html, re.DOTALL)
+    assert footer
+    assert 'href="https://github.com/lutrarutra/storyteller"' in footer.group()
+    assert 'aria-label="Storyteller on GitHub"' in footer.group()
+    assert "· interactive" not in footer.group()
+
+
+def test_favicon_embeds_the_code_flower_icon():
+    html = sty.Report("x").render()
+    favicon = re.search(r'<link rel="icon" type="image/svg\+xml" href="data:image/svg\+xml;base64,([^"]+)">', html)
+    assert favicon
+    assert base64.b64decode(favicon.group(1)) == asset_bytes("logo.svg")
+
+
 def test_text_and_captions_are_escaped(tmp_path):
     report = sty.Report("x", tmp_path / "r.html")
     attack = "<script>alert(1)</script><img src=x onerror=alert(2)>"
@@ -42,8 +60,8 @@ def test_text_and_captions_are_escaped(tmp_path):
         report.metrics({attack: attack})
     html = report.render()
     body = html.split("<body>", 1)[1]
-    # The only scripts are the theme JSON and the runtime.
-    assert len(re.findall(r"<script", body)) == 2
+    # The only scripts are the comments and theme JSON, the comments script and the runtime.
+    assert len(re.findall(r"<script", body)) == 4
     assert "onerror=alert" not in body.replace("onerror=alert(2)&gt;", "")
 
 
@@ -319,3 +337,134 @@ def test_demo_builds(tmp_path):
     path = build(Path(tmp_path / "demo.html"))
     assert check.check_file(path) == []
     assert path.stat().st_size < 9_500_000
+
+
+# -- cross-references
+
+
+def _image():
+    return np.zeros((8, 8, 3), dtype=np.uint8)
+
+
+def _refs(html: str) -> list[tuple[str, str]]:
+    return re.findall(r'<a href="#([^"]+)" class="cf-ref" data-cf-ref="[^"]*">(.*?)</a>', html)
+
+
+def test_references_link_and_label_their_blocks(tmp_path):
+    report = sty.Report("Refs", tmp_path / "r.html")
+    with report.section("qc", "Quality control"):
+        report.text("See [](#genes), [](#per-sample), [](#results) and [the cut-off plot](#genes).")
+        report.figure(_image(), "Genes per cell.", key="genes")
+        report.table({"a": [1]}, "Per sample, as in [](#genes).", key="per-sample")
+    with report.section("results", "Results"):
+        report.text("Back to [](#qc).")
+    html = report.render()
+    assert _refs(html) == [
+        ("b-genes", "Figure 1"),
+        ("b-per-sample", "Table 1"),
+        ("s-results", "Section 2"),
+        ("b-genes", "the cut-off plot"),
+        ("b-genes", "Figure 1"),  # in the table caption
+        ("s-qc", "Section 1"),
+    ]
+    assert 'id="b-genes"' in html and 'id="b-per-sample"' in html
+    assert '<span class="cf-caption-label">Figure 1.</span> Genes per cell.' in html
+    assert '<span class="cf-caption-label">Table 1.</span>' in html
+    assert check.check_html(html) == []
+
+
+def test_numbers_follow_reading_order_through_grids_and_tabs():
+    report = sty.Report("Order")
+    with report.section("a", "A"):
+        with report.grid(2):
+            report.figure(_image(), "one", key="one")
+            report.figure(_image(), "two", key="two")
+        with report.tabs():
+            with report.tab("First"):
+                report.figure(_image(), "three", key="three")
+            with report.tab("Second"):
+                report.figure(_image(), "four", key="four")
+        report.text("[](#four) [](#one)")
+    assert _refs(report.render()) == [("b-four", "Figure 4"), ("b-one", "Figure 1")]
+
+
+def test_reference_to_a_later_script_resolves(tmp_path):
+    first = sty.Report.open(tmp_path / "r", title="x")
+    with first.section("intro", "Intro"):
+        first.text("Details in [](#umap).")
+    first.close()
+    second = sty.Report.open(tmp_path / "r")
+    with second.section("clusters", "Clusters"):
+        second.figure(_image(), "UMAP.", key="umap")
+    second.close()
+    html = (tmp_path / "r.html").read_text()
+    assert ("b-umap", "Figure 1") in _refs(html)
+
+
+def test_broken_references_are_marked_and_reported(tmp_path):
+    report = sty.Report("Broken", tmp_path / "r.html")
+    with report.section("a", "A"):
+        report.text("[](#typo) and [](#note)")
+        report.callout("note", "untitled", key="note")
+    html = report.render()
+    assert 'data-cf-missing-ref="typo"' in html and 'data-cf-missing-ref="note"' in html
+    problems = check.check_html(html)
+    assert len(problems) == 2 and "[](#typo)" in problems[0]
+
+
+def test_unreferenced_figure_without_caption_has_no_label():
+    report = sty.Report("Plain")
+    with report.section("a", "A"):
+        report.figure(_image(), key="bare")
+        report.figure(_image(), key="cited")
+        report.text("[](#cited)")
+    html = report.render()
+    assert html.count('class="cf-caption-label"') == 1 and "Figure 2." in html
+
+
+def test_part_hash_changes_when_a_referenced_number_changes():
+    report = sty.Report("Hashes")
+    with report.section("text", "Text"):
+        report.text("[](#late)")
+    with report.section("other", "Other"):
+        report.text("no references")
+    with report.section("figs", "Figures"):
+        report.figure(_image(), "late", key="late")
+
+    def hashes():
+        return dict(re.findall(r'data-cf-part="([^"]+)" data-cf-hash="([^"]+)"', report.render()))
+
+    before = hashes()
+    with report.section("early", "Early"):
+        report.figure(_image(), "early")
+    report.move("early", before="figs")
+    after = hashes()
+    assert after["section:text"] != before["section:text"]  # now says Figure 2
+    assert after["section:figs"] != before["section:figs"]  # caption and section number changed
+    assert after["section:other"] == before["section:other"]  # nothing it shows changed
+    assert ("b-late", "Figure 2") in _refs(report.render())
+
+
+def test_outline_lists_link_targets(tmp_path):
+    report = sty.Report.open(tmp_path / "r", title="x")
+    with report.section("qc", "QC"):
+        report.figure(_image(), "a", key="genes")
+        report.text("unkeyed")
+    assert "#genes  figure (Figure 1)" in report.outline()
+
+
+def test_duplicate_keys_warn():
+    report = sty.Report("Dupes")
+    with report.section("a", "A"):
+        report.figure(_image(), key="hist")
+    with report.section("b", "B"):
+        report.figure(_image(), key="hist")
+    assert any("'hist' is used by more than one block" in w for w in report._section_warnings())
+
+
+def test_markdown_headings_and_links_render():
+    report = sty.Report("Md")
+    report.text("# Heading\n\n[site](https://example.org)", key="t")
+    html = report.render()
+    assert "<h4>Heading</h4>" in html
+    assert '<a href="https://example.org" target="_blank" rel="noopener noreferrer">site</a>' in html

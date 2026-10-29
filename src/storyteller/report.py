@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from . import adapters, markdown, render, tables
+from . import comments as reader_comments
 from .images import Asset, shrink
 from .interactive import explorer as ex
 from .store import DiskStore, MemoryStore, asset_meta, empty_document, referenced_assets
@@ -211,11 +212,26 @@ class Report:
         self._doc.setdefault("assets", {})[sha] = asset_meta(asset)
         return sha
 
-    def render(self, *, draft: bool | None = None, live_url: str | None = None) -> str:
+    def render(
+        self,
+        *,
+        draft: bool | None = None,
+        live_url: str | None = None,
+        comments: list[dict[str, Any]] | None = None,
+    ) -> str:
         with self._lock:
             return render.render_document(
-                self._ordered(), self._asset, draft=draft, live_url=live_url, fonts=self.fonts
+                self._ordered(), self._asset, draft=draft, live_url=live_url, fonts=self.fonts, comments=comments
             )
+
+    def _comments(self, target: Path) -> list[dict[str, Any]]:
+        """The readers' comments to keep in the page about to be written over `target`."""
+        if isinstance(self._store, DiskStore) and target == self.path:
+            return reader_comments.for_build(self._store.directory, target)
+        try:
+            return reader_comments.embedded(target.read_text(encoding="utf-8")) or []
+        except (FileNotFoundError, UnicodeDecodeError):
+            return []
 
     def _ordered(self) -> dict[str, Any]:
         """The document with summary and metrics first and provenance last, wherever they were added."""
@@ -240,7 +256,7 @@ class Report:
                     self._merge_from_disk()
                     self._doc["meta"]["updated"] = _now()
                     self._store.write(self._doc)
-                html = self.render()
+                html = self.render(comments=self._comments(target))
                 from .store import atomic_write
 
                 atomic_write(target, html.encode("utf-8"))
@@ -530,10 +546,23 @@ class Report:
             self._changed()
 
     def outline(self) -> str:
-        """The report's structure, one line per section or top-level block, with keys and status."""
-        lines = [
-            f"{self._doc['meta'].get('title', 'Report')}  ({'final' if self._doc['meta'].get('final') else 'draft'})"
-        ]
+        """The report's structure, one line per section or top-level block, with keys and status.
+        Keyed blocks inside sections are listed as ``#key``: text links to them with ``[](#key)``."""
+        final = self._doc["meta"].get("final", False)
+        lines = [f"{self._doc['meta'].get('title', 'Report')}  ({'final' if final else 'draft'})"]
+        nodes = self._ordered()["nodes"]
+        numbering = render.Context(self._asset, draft=not final)
+        numbering.number([n for n in nodes if not final or n.get("status") != "pending"])
+
+        def keyed(children: list[dict[str, Any]], indent: str) -> None:
+            for child in children:
+                if child["type"] == "section":
+                    continue
+                target = numbering.targets.get(child.get("key") or "")
+                if target and target.node is child:
+                    label = f" ({target.label})" if target.label else ""
+                    lines.append(f"{indent}#{child['key']}  {child['type']}{label}")
+                keyed(child.get("children", []), indent)
 
         def walk(nodes: list[dict[str, Any]], depth: int) -> None:
             for node in nodes:
@@ -543,11 +572,12 @@ class Report:
                     blocks = sum(1 for child in node.get("children", []) if child["type"] != "section")
                     source = f"  from {node['source']}" if node.get("source") else ""
                     lines.append(f"{indent}[{node['key']}] {node['title']}  ({status}, {blocks} blocks){source}")
+                    keyed(node.get("children", []), indent + "    ")
                     walk([c for c in node.get("children", []) if c["type"] == "section"], depth + 1)
                 elif depth == 0:
                     lines.append(f"{indent}[{node.get('key')}] {node['type']}")
 
-        walk(self._ordered()["nodes"], 0)
+        walk(nodes, 0)
         return "\n".join(lines)
 
     # -- blocks --------------------------------------------------------------------------------
@@ -875,6 +905,13 @@ class Report:
                 out.append(f"section {node['key']!r} failed: {node.get('error', '').splitlines()[-1:]}")
             elif node.get("status") == "running":
                 out.append(f"section {node['key']!r} is still marked as running (its script did not finish)")
+        seen: set[str] = set()
+        for node, _ in render.walk(self._doc["nodes"]):
+            key = node.get("key")
+            if key and node["type"] != "tab":
+                if key in seen:
+                    out.append(f"key {key!r} is used by more than one block; links [](#{key}) lead to the first")
+                seen.add(key)
         return out
 
     def fit_budget(self) -> list[str]:

@@ -9,7 +9,7 @@
 //
 // Chromium: playwright-core's own download (npx playwright-core install chromium),
 // or CHROMIUM_PATH pointing at an installed Chrome/Chromium.
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright-core';
@@ -75,6 +75,29 @@ try {
     await page.locator('[data-cf-explorer]').first().screenshot({ path: `${out}/explorer.png` });
   }
 
+  // A cross-reference into a closed tab opens the tab and scrolls to the block.
+  const intoTab = await page.evaluate(() =>
+    [...document.querySelectorAll('a.cf-ref[href^="#"]')].findIndex((a) => {
+      const target = document.getElementById(a.getAttribute('href').slice(1));
+      return target && target.closest('.cf-tab-panel') && !target.offsetParent;
+    })
+  );
+  if (intoTab >= 0) {
+    await page.locator('a.cf-ref[href^="#"]').nth(intoTab).click();
+    await page.waitForTimeout(200);
+    const shown = await page.evaluate((index) => {
+      const link = document.querySelectorAll('a.cf-ref[href^="#"]')[index];
+      const target = document.getElementById(link.getAttribute('href').slice(1));
+      const box = target.getBoundingClientRect();
+      return target.offsetParent !== null && box.top >= -2 && box.top < window.innerHeight;
+    }, intoTab);
+    if (!shown) fail('a reference into a closed tab did not open the tab and scroll to the block');
+    else ok('a reference into a closed tab opens the tab and scrolls to the block');
+  }
+  const brokenRefs = await page.locator('[data-cf-missing-ref]').count();
+  if (brokenRefs) fail(`${brokenRefs} cross-reference(s) lead nowhere`);
+  else ok(`${await page.locator('a.cf-ref').count()} cross-reference(s) resolve`);
+
   await page.setViewportSize({ width: 2560, height: 1300 });
   await page.waitForTimeout(300);
   const layout = await page.evaluate(() => {
@@ -104,6 +127,12 @@ try {
   await page.emulateMedia({ media: 'print' });
   await page.waitForTimeout(400);
   await page.pdf({ path: `${out}/report.pdf`, printBackground: true, preferCSSPageSize: true });
+  if (await page.locator('a.cf-ref[href^="#"]').count()) {
+    // Chromium writes in-page links as named destinations; without them references are dead in the PDF.
+    const pdf = (await readFile(`${out}/report.pdf`)).toString('latin1');
+    if (!/\/Dest\s*\/[sb]-/.test(pdf)) fail('the PDF has no in-document links');
+    else ok('cross-references are links in the PDF');
+  }
   const clipped = await page.evaluate(() => {
     const column = document.querySelector('.cf-sheet').getBoundingClientRect().right;
     return [...document.querySelectorAll('.js-plotly-plot .main-svg')].filter((svg) => svg.getBoundingClientRect().right > column + 2).length;

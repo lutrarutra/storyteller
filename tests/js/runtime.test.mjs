@@ -110,6 +110,11 @@ test('merge is deep and lets later values win', () => {
   assert.deepEqual(runtime.merge({ a: { b: 1, c: 2 }, d: [1] }, { a: { c: 3 }, d: [2] }), { a: { b: 1, c: 3 }, d: [2] });
 });
 
+test('theme toggle switches only between light and dark', () => {
+  assert.equal(runtime.toggleTheme('light'), 'dark');
+  assert.equal(runtime.toggleTheme('dark'), 'light');
+});
+
 test('gzip data decodes into typed views', async () => {
   const floats = Float32Array.from([1.5, 2.5]);
   const compressed = gzipSync(Buffer.from(floats.buffer));

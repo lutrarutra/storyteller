@@ -13,17 +13,19 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-from collections.abc import Callable
+import re
+from collections.abc import Callable, Iterator
 from datetime import datetime
 from functools import cache
-from html import escape
+from html import escape, unescape
 from importlib import resources
-from typing import Any
+from typing import Any, NamedTuple
 
 from . import __version__
 from .adapters import CARTESIAN_TRACES
+from .comments import to_json as comments_json
 from .images import Asset
-from .markdown import ASSET_SCHEME
+from .markdown import ASSET_SCHEME, REF_ATTR
 from .theme import palette
 from .theme import plotly as plotly_theme
 
@@ -35,7 +37,13 @@ STATUS_LABELS = {"pending": "planned", "running": "updating", "error": "failed"}
 TOC_MARKS = {"pending": "○", "running": "◐", "error": "!"}
 
 # Bumped whenever the HTML a node renders to changes, so part hashes change with it.
-RENDER_VERSION = "1"
+RENDER_VERSION = "2"
+
+# Blocks that carry a number in their caption, and the word for it.
+NUMBERED = {"figure": "Figure", "plotly": "Figure", "table": "Table"}
+_REF = re.compile(rf'<a([^>]*?) {REF_ATTR}="([^"]*)"([^>]*)>(.*?)</a>', re.DOTALL)
+_REF_KEY = re.compile(rf'{REF_ATTR}="([^"]*)"')
+_HREF = re.compile(r' href="[^"]*"')
 
 
 @cache
@@ -63,8 +71,17 @@ def node_hash(node: Any, *salt: Any) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
+class Target(NamedTuple):
+    """Where a cross-reference to a key leads, and the text an empty `[](#key)` link gets."""
+
+    node: dict[str, Any]
+    id: str
+    label: str  # "" when the block has nothing to call it by
+
+
 class Context:
-    """What renderers share: asset lookup, draft mode and the libraries the page needs."""
+    """What renderers share: asset lookup, draft mode, the libraries the page needs, and
+    the numbers and link targets of the blocks."""
 
     def __init__(self, assets: AssetLookup, *, draft: bool) -> None:
         self.assets = assets
@@ -72,6 +89,9 @@ class Context:
         self.libraries: set[str] = set()
         self.part = ""
         self._ids: dict[str, int] = {}
+        self.numbers: dict[int, int] = {}  # id(node) -> its figure, table or section number
+        self.targets: dict[str, Target] = {}
+        self.referenced: set[str] = set()
 
     def uid(self, kind: str) -> str:
         """An id stable for this position in this part, so patched parts never collide."""
@@ -84,7 +104,10 @@ class Context:
         return self.assets(sha).data_uri()
 
     def resolve_html(self, html: str) -> str:
-        """Swaps `cfasset:<sha>` image references (from Markdown) for data URIs."""
+        """Swaps `cfasset:<sha>` image references (from Markdown) for data URIs, and points
+        cross-references at their blocks."""
+        if REF_ATTR in html:
+            html = _REF.sub(self._resolve_ref, html)
         if ASSET_SCHEME not in html:
             return html
         out, rest = [], html
@@ -95,6 +118,78 @@ class Context:
             rest = rest[end:]
         out.append(rest)
         return "".join(out)
+
+    def _resolve_ref(self, match: re.Match[str]) -> str:
+        before, key, after, text = match.groups()
+        target = self.targets.get(unescape(key))
+        if target is None or not (text or target.label):
+            # Not written yet (in a draft) or a typo: `check` reports it.
+            return f'<a class="cf-ref cf-ref-missing" data-cf-missing-ref="{key}">{text or key + "?"}</a>'
+        attrs = _HREF.sub("", before + after)
+        return f'<a href="#{escape(target.id)}"{attrs} {REF_ATTR}="{key}">{text or escape(target.label)}</a>'
+
+    def number(self, nodes: list[dict[str, Any]]) -> None:
+        """Numbers figures, tables and top-level sections in reading order and collects the
+        blocks that references can lead to: the first block with each key."""
+        counts: dict[str, int] = {}
+        sections = 0
+        for node, depth in walk(nodes):
+            kind = node["type"]
+            label = ""
+            if kind == "section" and depth == 0:
+                sections += 1
+                self.numbers[id(node)] = sections
+                label = f"Section {sections}"
+            elif kind == "section":
+                label = node.get("title", "")
+            elif kind in NUMBERED:
+                word = NUMBERED[kind]
+                counts[word] = counts.get(word, 0) + 1
+                self.numbers[id(node)] = counts[word]
+                label = f"{word} {counts[word]}"
+            elif kind == "explorer":
+                label = node["spec"].get("title") or ""
+            elif kind in ("callout", "code", "tab"):
+                label = node.get("title") or ""
+            for html in (node.get("html"), node.get("caption_html")):
+                if html and kind not in ("table", "code", "html"):
+                    self.referenced.update(unescape(k) for k in _REF_KEY.findall(html))
+            key = node.get("key")
+            if key and key not in self.targets and kind != "tab":
+                anchor = f"s-{key}" if kind == "section" else f"b-{key}"
+                self.targets[key] = Target(node, anchor, label)
+
+    def anchor(self, node: dict[str, Any]) -> str | None:
+        """The id of this block's element, if references can lead to it."""
+        target = self.targets.get(node.get("key") or "")
+        return target.id if target and target.node is node else None
+
+    def caption_label(self, node: dict[str, Any], has_caption: bool) -> str:
+        """`Figure 3. ` before the caption: shown with a caption, or when text refers to the block."""
+        number = self.numbers.get(id(node))
+        if number is None or not (has_caption or node.get("key") in self.referenced):
+            return ""
+        return f'<span class="cf-caption-label">{NUMBERED[node["type"]]} {number}.</span> '
+
+    def salt(self, node: dict[str, Any]) -> list[Any]:
+        """The numbers and link targets a part shows, which can change when other parts do,
+        so its hash changes with them and live updates re-render it."""
+        out: list[Any] = []
+        for child, _ in walk([node]):
+            out.append([self.numbers.get(id(child)), child.get("key") in self.referenced])
+            for html in (child.get("html"), child.get("caption_html")):
+                if html and REF_ATTR in html:
+                    for key in _REF_KEY.findall(html):
+                        target = self.targets.get(unescape(key))
+                        out.append([key, target and target.id, target and target.label])
+        return out
+
+
+def walk(nodes: list[dict[str, Any]], depth: int = 0) -> Iterator[tuple[dict[str, Any], int]]:
+    """Every node in reading order with its section depth, into grids, tabs and sections."""
+    for node in nodes:
+        yield node, depth
+        yield from walk(node.get("children", []), depth + 1 if node["type"] == "section" else depth)
 
 
 # -- nodes ----------------------------------------------------------------------------
@@ -108,12 +203,16 @@ def render_node(node: dict[str, Any], ctx: Context, depth: int, attrs: str = "")
     renderer = RENDERERS.get(node["type"])
     if renderer is None:
         return f'<div class="cf-block cf-placeholder"{attrs}>Unknown block type {escape(node["type"])}</div>'
+    anchor = ctx.anchor(node)
+    if anchor and node["type"] != "section":  # sections set their own id
+        attrs += f' id="{escape(anchor)}"'
     return renderer(node, ctx, depth, attrs)
 
 
-def _caption(node: dict[str, Any], tag: str = "figcaption") -> str:
-    caption = node.get("caption_html")
-    return f'<{tag} class="cf-caption">{caption}</{tag}>' if caption else ""
+def _caption(node: dict[str, Any], ctx: Context, tag: str = "figcaption") -> str:
+    caption = ctx.resolve_html(node.get("caption_html") or "")
+    label = ctx.caption_label(node, bool(caption))
+    return f'<{tag} class="cf-caption">{label}{caption}</{tag}>' if label or caption else ""
 
 
 def _section(node, ctx: Context, depth: int, attrs: str) -> str:
@@ -122,7 +221,8 @@ def _section(node, ctx: Context, depth: int, attrs: str) -> str:
     anchor = f"s-{node['key']}"
     head = ['<header class="cf-section-head">']
     if depth == 0:
-        head.append('<span class="cf-section-number" aria-hidden="true"></span>')
+        number = ctx.numbers.get(id(node))
+        head.append(f'<span class="cf-section-number" aria-hidden="true">{f"{number:02d}" if number else ""}</span>')
     if status != "ready" and (ctx.draft or status == "error"):
         head.append(
             f'<span class="cf-pill cf-pill-{status}"><span class="cf-dot"></span>{STATUS_LABELS[status]}</span>'
@@ -188,17 +288,18 @@ def _figure(node, ctx: Context, depth: int, attrs: str) -> str:
     return (
         f'<figure class="cf-block cf-figure cf-figure-{escape(width)}"{attrs}>'
         f'<img src="{asset.data_uri()}" alt="{alt}"{size} loading="lazy" decoding="async">'
-        f"{_caption(node)}</figure>"
+        f"{_caption(node, ctx)}</figure>"
     )
 
 
 def _table(node, ctx: Context, depth: int, attrs: str) -> str:
     shape = node.get("shape", {})
-    caption = node.get("caption_html") or ""
+    caption = ctx.resolve_html(node.get("caption_html") or "")
     if shape.get("rows", 0) > shape.get("shown", 0):
         more = f"Showing {shape['shown']:,} of {shape['rows']:,} rows."
         caption = f"{caption} {more}" if caption else more
-    caption_html = f'<p class="cf-caption">{caption}</p>' if caption else ""
+    label = ctx.caption_label(node, bool(caption))
+    caption_html = f'<p class="cf-caption">{label}{caption}</p>' if label or caption else ""
     return f'<div class="cf-block cf-table-block"{attrs}><div class="cf-table-wrap">{node["html"]}</div>{caption_html}</div>'
 
 
@@ -276,7 +377,7 @@ def _plotly(node, ctx: Context, depth: int, attrs: str) -> str:
         f'<div class="cf-static">{static}</div>'
         f'<div class="cf-live"><div class="cf-plotly-frame" data-cf-plotly data-cf-spec="{spec_id}" '
         f'data-height="{height}" style="min-height:{height}px"></div></div>'
-        f'{_caption(node)}<script type="application/json" id="{spec_id}">{json_script(spec)}</script></figure>'
+        f'{_caption(node, ctx)}<script type="application/json" id="{spec_id}">{json_script(spec)}</script></figure>'
     )
 
 
@@ -319,7 +420,7 @@ def _explorer(node, ctx: Context, depth: int, attrs: str) -> str:
     return (
         f'<div class="cf-block cf-explorer" data-cf-explorer data-cf-spec="{spec_id}" data-cf-data="{data_id}"{attrs}>'
         f'<div class="cf-explorer-head"><span class="cf-explorer-badge">Interactive</span>'
-        f'<h3 class="cf-explorer-title">{title}</h3>{actions}</div>{static}{live}{_caption(node, "p")}'
+        f'<h3 class="cf-explorer-title">{title}</h3>{actions}</div>{static}{live}{_caption(node, ctx, "p")}'
         f'<script type="application/json" id="{spec_id}">{json_script(spec)}</script>'
         f'<script type="application/octet-stream" id="{data_id}">{data}</script></div>'
     )
@@ -513,12 +614,13 @@ def _header(meta: dict[str, Any], draft: bool, sections: list[dict[str, Any]]) -
     subtitle = f'<p class="cf-subtitle">{escape(meta["subtitle"])}</p>' if meta.get("subtitle") else ""
     toolbar = (
         '<div class="cf-toolbar">'
-        '<button type="button" class="cf-button cf-js-only" data-cf-action="theme" title="Light, dark or automatic theme">'
+        '<button type="button" class="cf-button cf-js-only" data-cf-action="theme" '
+        'title="Toggle light/dark theme (follows system preference by default)">'
         '<span class="cf-theme-icon" aria-hidden="true"></span>Theme</button>'
         '<button type="button" class="cf-button cf-js-only" data-cf-action="print" title="Print or save as PDF">Print / PDF</button>'
         "</div>"
     )
-    eyebrow = escape(meta.get("eyebrow") or "code flower · analysis report")
+    eyebrow = escape(meta.get("eyebrow") or "code flower · storyteller report")
     html = (
         f'<span class="cf-logo">{asset_text("logo.svg")}</span><p class="cf-eyebrow">{eyebrow}</p>'
         f'<h1 class="cf-title">{escape(meta.get("title", "Report"))}</h1>{subtitle}{toolbar}'
@@ -553,24 +655,30 @@ def render_document(
     draft: bool | None = None,
     live_url: str | None = None,
     fonts: bool = True,
+    comments: list[dict[str, Any]] | None = None,
 ) -> str:
-    """The report as one self-contained HTML page."""
+    """The report as one self-contained HTML page, with the readers' `comments` (see comments.py)."""
     meta = document.get("meta", {})
     nodes = document.get("nodes", [])
     draft = (not meta.get("final", False)) if draft is None else draft
     ctx = Context(assets, draft=draft)
     sections = [node for node in nodes if node["type"] == "section"]
     visible = [node for node in nodes if draft or node.get("status") != "pending"]
+    ctx.number(visible)
 
     parts = []
     for node in visible:
         part = f"{node['type']}:{node['key']}"
         ctx.part = part
-        parts.append(render_node(node, ctx, 0, _with_part(part, node_hash(node, draft))))
+        parts.append(render_node(node, ctx, 0, _with_part(part, node_hash(node, draft, ctx.salt(node)))))
     toc_sections = [s for s in sections if draft or s.get("status") != "pending"]
     footer_html = (
         f"{asset_text('logo-mono.svg')}<span>Made with code flower · storyteller {escape(__version__)}</span>"
-        f'<span class="cf-js-only">· interactive</span>'
+        '<a class="cf-github" href="https://github.com/lutrarutra/storyteller" target="_blank" '
+        'rel="noopener noreferrer" aria-label="Storyteller on GitHub">'
+        '<svg viewBox="0 0 24 24" aria-hidden="true">'
+        '<path fill="currentColor" d="M12 .5C5.65.5.5 5.65.5 12c0 5.09 3.29 9.41 7.86 10.94.58.11.79-.25.79-.56v-2.02c-3.2.7-3.87-1.36-3.87-1.36-.53-1.33-1.28-1.68-1.28-1.68-1.04-.7.08-.69.08-.69 1.15.08 1.75 1.19 1.75 1.19 1.02 1.75 2.67 1.25 3.32.95.1-.74.4-1.25.72-1.54-2.55-.29-5.24-1.29-5.24-5.72 0-1.26.45-2.29 1.2-3.1-.12-.29-.52-1.47.11-3.07 0 0 .98-.31 3.2 1.19a10.9 10.9 0 0 1 5.83 0c2.22-1.5 3.2-1.19 3.2-1.19.63 1.6.23 2.78.11 3.07.75.81 1.2 1.84 1.2 3.1 0 4.44-2.7 5.42-5.27 5.71.41.36.77 1.04.77 2.1v3.11c0 .31.21.67.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"/>'
+        "</svg></a>"
     )
     libraries = sorted(ctx.libraries)
     if "plotly-strict" in libraries and "plotly-cartesian" in libraries:
@@ -582,11 +690,13 @@ def render_document(
     )
     live = f'<meta name="cf-live" content="{escape(live_url)}">' if live_url else ""
     title = escape(meta.get("title", "Report"))
+    favicon = base64.b64encode(asset_bytes("logo.svg")).decode("ascii")
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         '<meta name="color-scheme" content="light dark">'
         f'<meta name="generator" content="storyteller {escape(__version__)}">{live}'
+        f'<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,{favicon}">'
         f"<title>{title}</title>"
         f"<style>{_font_faces() if fonts else ''}</style>"
         f"<style>{_theme_css(meta)}{asset_text('report.css')}</style></head>"
@@ -596,6 +706,9 @@ def render_document(
         f'<div data-cf-slot="main">{"".join(parts)}</div>'
         f'<footer class="cf-footer"{_with_part("footer", node_hash(footer_html))}>{footer_html}</footer>'
         "</main><div></div></div>"
+        # Before the runtime: comments.js keeps a copy of the page as built, for "Save copy".
+        f'<script type="application/json" id="cf-comments">{comments_json(comments or [])}</script>'
+        f"<script>{asset_text('comments.js')}</script>"
         f'<script type="application/json" id="cf-theme">{json_script(theme_json())}</script>'
         f"{scripts}<script>{asset_text('runtime.js')}</script>"
         "</div></body></html>"

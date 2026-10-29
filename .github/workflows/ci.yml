@@ -58,6 +58,7 @@ jobs:
           uv run --no-sync storyteller demo -o "$RUNNER_TEMP/demo.html"
           node tests/e2e/check_report.mjs "$RUNNER_TEMP/demo.html" "$RUNNER_TEMP/e2e"
           node tests/e2e/check_live.mjs "$PWD/.venv/bin/python" "$RUNNER_TEMP/live"
+          node tests/e2e/check_comments.mjs "$PWD/.venv/bin/python" "$RUNNER_TEMP/comments"
 
       - uses: actions/upload-artifact@v5
         if: always()

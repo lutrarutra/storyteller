@@ -82,6 +82,8 @@ How it behaves:
 | `with r.tabs(): with r.tab("A"):` | Alternative views of one thing (per sample, per method). |
 | `r.provenance()` | Software versions and scripts; `finalize()` adds it. |
 
+Every block takes `key=`: it names the block so text can link to it (see "Cross-references").
+
 Figures: make them with `sty.theme.use()` active, at their final size (`figsize` about
 7 × 4 in for full width, 3.5 × 3 in a grid). Small figures are embedded as SVG and large ones as
 PNG at 2× density. Big photos and micrographs are resized to 2000 px and compressed.
@@ -129,6 +131,29 @@ r.explorer(
   data, methods (tools, versions, parameters), results, and limitations or open questions.
 - Report what the data supports. Say when a result is weak or exploratory (`callout("warning", ...)`).
 - Every figure and table gets a caption that says what to look at.
+- Refer to figures, tables and sections with links, not by hand-written numbers (see below).
+
+### Cross-references
+
+Give a block that the text talks about a `key=`, then link to it with a Markdown link to
+`#key`. An empty link gets the block's number; a link with text keeps the text:
+
+```python
+with r.section("qc", "Quality control"):
+    r.text("Damaged cells form the low tail in [](#qc-genes); [](#qc-per-sample) has the counts.")
+    r.figure(fig, caption="Genes per cell.", key="qc-genes")             # → "Figure 2"
+    r.table(per_sample, caption="Cells kept per sample.", key="qc-per-sample")  # → "Table 1"
+# elsewhere: "as shown in [](#qc)" → "Section 1"; "[the QC plot](#qc-genes)" keeps its text
+```
+
+- Numbers are set when the report is built, so they stay right when sections are added,
+  moved or written by other scripts, and a link may point at a block a later script writes.
+- Links work in summaries, callouts and captions too, and in the PDF.
+- Keys share one namespace with section keys: use specific ones (`qc-genes`, not `genes`
+  or the section's own key). `storyteller outline reports/pbmc` lists them (`#qc-genes`).
+- Callouts, code and explorers have no number: link to them with text (`[the warning](#mt-note)`),
+  or give them a `title`.
+- A broken link shows as `key?` in the draft; `finalize()` and `storyteller check` report it.
 - Colours: keep `sty.theme.use()` and the defaults. Categories get colours in a fixed order
   (at most 8; fold the rest into "Other" or split into panels). For continuous values
   use `cmap="cf_teal"`, and for signed values `cmap="cf_div"`. The colours are colour-blind
@@ -155,6 +180,26 @@ r.explorer(
   press **Open interactive** in the tab header for live charts.
 - `storyteller serve reports/pbmc` serves it with live updates at
   http://127.0.0.1:8765 for browsers outside VS Code.
+
+## Comments from the user
+
+The user can select text in the report, right-click and comment. A **note** is for other
+readers; a **request** is for you: a change ("say kept, not pass") or a question. When the
+user says they left comments, or sends them from the report:
+
+```sh
+storyteller comments list reports/pbmc        # open ones: id, section, the words, the comment
+```
+
+- Each comment names its section (`section:qc`), the nearest block (`near #...`) and the
+  exact words it is on: find them in the script that writes that section, change it, and
+  re-run the script. Do not edit the HTML.
+- Then answer it: `storyteller comments resolve reports/pbmc c-k3x9p2aa "Changed to kept."`
+  (or `reply` to ask back, leaving it open). The user sees the answer in the report.
+- Leave notes alone, and never delete comments; they are the user's.
+- A comment whose words you rewrote shows as unanchored to the user: resolve it to say so.
+- If the user sends you a copy they saved with comments in it,
+  `storyteller comments import reports/pbmc copy.html` adds them to the report.
 
 ## The library itself
 

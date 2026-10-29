@@ -78,6 +78,41 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_comments(args: argparse.Namespace) -> int:
+    import json
+
+    from . import comments
+
+    try:
+        if args.action == "list":
+            found = comments.load(args.report)
+            shown = [c for c in found if args.all or c["status"] == "open"]
+            if args.json:
+                print(json.dumps(shown, indent=1, ensure_ascii=False))
+                return 0
+            hidden = len(found) - len(shown)
+            if not shown:
+                print("no open comments" + (f" ({hidden} resolved; --all shows them)" if hidden else ""))
+            for comment in shown:
+                print(comments.describe(comment) + "\n")
+            if shown and hidden:
+                print(f"({hidden} resolved; --all shows them)")
+        elif args.action in ("reply", "resolve"):
+            comment = comments.reply(args.report, args.id, args.message or "", resolve=args.action == "resolve")
+            print(comments.describe(comment))
+        elif args.action == "import":
+            other = comments.embedded(Path(args.file).read_text(encoding="utf-8"))
+            if other is None:
+                print(f"{args.file} has no comments slot", file=sys.stderr)
+                return 1
+            added, updated = comments.merge(args.report, other)
+            print(f"{added} added, {updated} updated")
+    except (FileNotFoundError, KeyError, ValueError) as error:
+        print(error.args[0] if error.args else error, file=sys.stderr)
+        return 1
+    return 0
+
+
 def cmd_palette(args: argparse.Namespace) -> int:
     from html import escape
 
@@ -138,6 +173,25 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_argument("report")
     sub.add_argument("key")
     sub.set_defaults(run=cmd_remove)
+
+    sub = commands.add_parser("comments", help="list, answer and resolve the comments readers left on a report")
+    actions = sub.add_subparsers(dest="action", required=True)
+    action = actions.add_parser("list", help="open comments: where, on which words, and what they say")
+    action.add_argument("report")
+    action.add_argument("--all", action="store_true", help="resolved ones too")
+    action.add_argument("--json", action="store_true")
+    action = actions.add_parser("reply", help="answer a comment, leaving it open")
+    action.add_argument("report")
+    action.add_argument("id")
+    action.add_argument("message")
+    action = actions.add_parser("resolve", help="mark a comment done, with an optional answer")
+    action.add_argument("report")
+    action.add_argument("id")
+    action.add_argument("message", nargs="?", help="what you changed, shown to the reader")
+    action = actions.add_parser("import", help="add the comments from a copy a reader saved")
+    action.add_argument("report")
+    action.add_argument("file")
+    sub.set_defaults(run=cmd_comments)
 
     sub = commands.add_parser("check", help="check that HTML files are self-contained and small enough")
     sub.add_argument("files", nargs="+")

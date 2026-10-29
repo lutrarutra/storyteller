@@ -24,7 +24,6 @@
   font: 400 15px/1.6 var(--cf-font);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  counter-reset: cf-section cf-figure cf-table;
 }
 
 .cf-report *,
@@ -47,6 +46,24 @@ body {
 .cf-report a {
   color: var(--cf-indigo);
   text-underline-offset: 2px;
+}
+
+/* cross-references to a figure, table or section: [](#key) in the text */
+.cf-report a.cf-ref {
+  text-decoration: none;
+}
+
+.cf-report a.cf-ref:hover {
+  text-decoration: underline;
+}
+
+.cf-report a.cf-ref-missing {
+  color: var(--cf-muted);
+  text-decoration: underline dashed;
+}
+
+.cf-block[id] {
+  scroll-margin-top: 24px;
 }
 
 .cf-report :focus-visible {
@@ -276,7 +293,7 @@ body {
 }
 
 .cf-theme-icon::before {
-  content: '◐';
+  content: '☀';
 }
 
 [data-state='light'] > .cf-theme-icon::before {
@@ -408,7 +425,6 @@ body {
 /* -- sections */
 
 .cf-section {
-  counter-increment: cf-section;
   padding-top: 32px;
   margin-top: 32px;
   border-top: 1.5px dashed var(--cf-soft-line);
@@ -422,7 +438,6 @@ body {
 }
 
 .cf-section .cf-section {
-  counter-increment: none;
   padding-top: 8px;
   margin-top: 24px;
   border-top: 0;
@@ -440,10 +455,6 @@ body {
   color: var(--cf-teal);
   font: 700 0.8rem/1 var(--cf-font);
   letter-spacing: 0.13em;
-}
-
-.cf-section-number::before {
-  content: counter(cf-section, decimal-leading-zero);
 }
 
 .cf-report h2 {
@@ -578,7 +589,6 @@ body {
 /* -- figures */
 
 .cf-figure {
-  counter-increment: cf-figure;
   margin: 22px 0;
 }
 
@@ -610,8 +620,7 @@ body {
   max-width: 72ch;
 }
 
-.cf-figure figcaption::before {
-  content: 'Figure ' counter(cf-figure) '. ';
+.cf-caption-label {
   color: var(--cf-ink);
   font-weight: 700;
 }
@@ -655,7 +664,6 @@ body {
 /* -- tables */
 
 .cf-table-block {
-  counter-increment: cf-table;
   margin: 22px 0;
 }
 
@@ -723,12 +731,6 @@ body {
 .cf-table td.cf-flag {
   background: var(--cf-pink-soft);
   color: var(--cf-critical-status);
-  font-weight: 700;
-}
-
-.cf-table-block .cf-caption::before {
-  content: 'Table ' counter(cf-table) '. ';
-  color: var(--cf-ink);
   font-weight: 700;
 }
 
@@ -1107,6 +1109,10 @@ body {
   height: 18px;
 }
 
+.cf-footer .cf-github {
+  display: inline-flex;
+}
+
 /* -- forced colours (Windows high contrast): drop decoration, keep structure */
 
 @media (forced-colors: active) {
@@ -1125,6 +1131,193 @@ body {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* -- readers' comments (comments.js) */
+
+.cf-report mark.cf-mark {
+  padding: 0;
+  border-bottom: 2px solid var(--cf-yellow);
+  border-radius: 2px;
+  background: var(--cf-yellow-soft);
+  color: inherit;
+  cursor: help;
+}
+
+.cf-report mark.cf-mark-request {
+  border-bottom-color: var(--cf-indigo);
+  background: var(--cf-indigo-soft);
+}
+
+.cf-report mark.cf-mark-resolved {
+  border-bottom-style: dashed;
+  border-bottom-color: var(--cf-muted);
+  background: transparent;
+}
+
+.cf-report mark.cf-mark-flash {
+  outline: 2px solid var(--cf-indigo);
+  outline-offset: 2px;
+}
+
+.cf-comment-ui {
+  position: fixed;
+  z-index: 50;
+  max-width: min(360px, calc(100vw - 16px));
+  padding: 10px;
+  border: var(--cf-border) solid var(--cf-line);
+  border-radius: var(--cf-radius-small);
+  background: var(--cf-card);
+  box-shadow: var(--cf-lift) var(--cf-lift) 0 var(--cf-shadow);
+  color: var(--cf-ink);
+  font: 400 14px/1.5 var(--cf-font);
+}
+
+.cf-comment-ui[hidden] {
+  display: none !important;
+}
+
+.cf-comment-ui p {
+  margin: 0 0 6px;
+}
+
+.cf-comment-menu {
+  display: grid;
+  padding: 4px;
+}
+
+.cf-comment-menu-item {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cf-comment-menu-item:hover,
+.cf-comment-menu-item:focus-visible {
+  background: var(--cf-yellow-soft);
+}
+
+.cf-comment-editor textarea {
+  display: block;
+  width: min(320px, calc(100vw - 40px));
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border: var(--cf-border) solid var(--cf-soft-line);
+  border-radius: 6px;
+  background: var(--cf-paper);
+  color: inherit;
+  font: inherit;
+  resize: vertical;
+}
+
+.cf-comment-kind {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--cf-muted);
+  font-size: 13px;
+}
+
+.cf-comment-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.cf-comment-ui .cf-button {
+  padding: 3px 11px;
+  font-size: 13px;
+}
+
+.cf-comment-meta {
+  color: var(--cf-muted);
+  font-size: 12px;
+}
+
+.cf-comment-body {
+  white-space: pre-wrap;
+}
+
+.cf-comment-reply {
+  padding-left: 8px;
+  border-left: 2px solid var(--cf-soft-line);
+  white-space: pre-wrap;
+}
+
+.cf-comment-quote {
+  color: var(--cf-muted);
+  font-style: italic;
+}
+
+.cf-comments-bar {
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 999px;
+}
+
+.cf-comments-lost,
+.cf-comments-unsaved {
+  color: var(--cf-muted);
+  font-size: 13px;
+}
+
+.cf-comments-lost {
+  color: var(--cf-critical-status);
+}
+
+.cf-comments-panel {
+  right: 16px;
+  bottom: 64px;
+  width: min(380px, calc(100vw - 32px));
+  max-width: none;
+  max-height: min(70vh, 640px);
+  overflow: auto;
+}
+
+.cf-comments-panel-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cf-comments-list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cf-comments-item {
+  padding: 8px 8px 8px 10px;
+  border-left: 3px solid var(--cf-yellow);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.cf-comments-item + .cf-comments-item {
+  margin-top: 6px;
+}
+
+.cf-comments-item:hover {
+  background: var(--cf-paper);
+}
+
+.cf-comments-item-request {
+  border-left-color: var(--cf-indigo);
+}
+
+.cf-comments-item-lost {
+  border-left-style: dashed;
 }
 
 /* -- print: the sheet becomes the page */
@@ -1158,6 +1351,7 @@ body {
   .cf-host-only,
   .cf-explorer-actions,
   .cf-lightbox,
+  .cf-comment-ui,
   .modebar-container {
     display: none !important;
   }
