@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - Comments: readers select text, right-click and leave a note, or a request for the agent;
   hovering a highlight shows it with Edit, Resolve and Delete, and a list shows them all.

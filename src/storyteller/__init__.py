@@ -10,7 +10,7 @@
 See the skill (skill/SKILL.md) for the full workflow.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from . import theme  # noqa: E402
 from .interactive import Bar, Box, Histogram, Scatter, Select, Stat, Table, Threshold, Toggle  # noqa: E402
