@@ -1,0 +1,32 @@
+name: Release
+
+# A vX.Y.Z tag on main builds the sdist and wheel and attaches them to a GitHub release.
+# The sandbox image clones the tagged source (REPORT_VERSION in its Dockerfile).
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: Check the version matches the tag
+        run: |
+          version=$(grep -m1 '^version' pyproject.toml | cut -d'"' -f2)
+          test "v$version" = "$GITHUB_REF_NAME"
+          grep -q "__version__ = \"$version\"" src/storyteller/__init__.py
+
+      - name: Build
+        run: uv build
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --notes-file CHANGELOG.md

@@ -1,0 +1,49 @@
+{
+  "packages": [
+    {
+      "name": "plotly.js-cartesian-dist-min",
+      "version": "4.1.2",
+      "integrity": "sha512-3UkyAT7/U8f3sOLavLnUjA6mqFmnqEe246GZhxT0J3TT9oZ0mh6SgwsL1yo/3/4xfmRSDFdGOxe+EsvT2XiE0g==",
+      "files": {
+        "vendor/plotly.LICENSE": "8c45d9eaf50c2f72dd9c7ab9ef440788ba58a3538484b5c51c1f17d5128752e7",
+        "vendor/plotly-cartesian.min.js": "aaf12ff1d4671f7e93f6df4291651ab4ca6b76c0ea5f1576ec1030e3c2819a20"
+      }
+    },
+    {
+      "name": "plotly.js-strict-dist-min",
+      "version": "4.1.2",
+      "integrity": "sha512-hEKh0xY+8m0ekp5qWpHDbo9hMQbPPXuSOQhciviSpMGNQBUbguvgja1P1v9/407Gy5RIx6xl54BNlZrU0DdTzA==",
+      "files": {
+        "vendor/plotly-strict.min.js": "1e7b7d8428f6e2b5e8e9ff11a576dd09c635ebae0b40906da9d49fc1cb6a2146"
+      }
+    },
+    {
+      "name": "d3",
+      "version": "7.9.0",
+      "integrity": "sha512-e1U46jVP+w7Iut8Jt8ri1YsPOvFpg46k+K8TpCb0P+zjCkjkPnV7WzfDJzMHy1LnA+wj5pLT1wjO901gLXeEhA==",
+      "files": {
+        "vendor/d3.LICENSE": "3e6849627f74ff73c257a3ae1efb574015d94fc1035c05ec3c15805165efcbc4",
+        "vendor/d3.min.js": "f2094bbf6141b359722c4fe454eb6c4b0f0e42cc10cc7af921fc158fceb86539"
+      }
+    },
+    {
+      "name": "@fontsource-variable/dm-sans",
+      "version": "5.3.0",
+      "integrity": "sha512-BpUG5bqePiDFMBM4ZtLSlPdAIOM990uB1dlXzIf4aw21yQR7BmykedLXXXMqGWsR18aMLOsbWccwJNh3ztTQaA==",
+      "files": {
+        "fonts/dm-sans.LICENSE": "6fbd040a29c2037a765dfb9f2561e9965b5c95c6dcb5dce516089d63d5f17af7",
+        "fonts/dm-sans-latin-wght-italic.woff2": "f1a235db5bcb8730707844188d35201ecdf63e56c5dcce97bab24a9c7066091d",
+        "fonts/dm-sans-latin-wght-normal.woff2": "9fea608a947e67020c33cad9a6fe3d60c54119dfb8cff87768a8117a15ed7543"
+      }
+    },
+    {
+      "name": "@fontsource-variable/fredoka",
+      "version": "5.3.0",
+      "integrity": "sha512-13w98iw2RcmYfZQRZPLSu+0YJK3HHm5A2XrpU26moFIAePmfiKfvkmEJUgkc8r5GNR+pbDijOueS1KdGAMAWmQ==",
+      "files": {
+        "fonts/fredoka.LICENSE": "9bbd4f5f107895d5a213579b73821fadd05105241cf4360e86050199fcfd6034",
+        "fonts/fredoka-latin-wght-normal.woff2": "99d6c78e043710d4f83ed90716779798b7b04eb690f73e0ad0e8f32d1f0e98c2"
+      }
+    }
+  ]
+}

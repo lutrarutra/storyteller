@@ -1,0 +1,11 @@
+# The sandbox image copies this checkout in development (--build-context storyteller=…).
+.venv/
+node_modules/
+**/__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.git/
+dist/
+build/
+examples/**/reports/

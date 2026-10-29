@@ -1,0 +1,13 @@
+.venv/
+node_modules/
+__pycache__/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+e2e-output/
+e2e-live/
+examples/**/reports/
+storyteller-demo.html
+codeflower-palette.html

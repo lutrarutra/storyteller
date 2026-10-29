@@ -1,0 +1,1243 @@
+/* storyteller: code flower's paper-and-ink look (codeflower.dev, the extension, the launcher).
+ *
+ * Tokens live on .cf-report rather than :root so the report also styles itself
+ * inside a host that embeds only its body (VS Code's sanitised preview). The
+ * --cf-* colour values are generated from theme/palette.py and prepended by
+ * render.py; this file only uses them.
+ */
+
+.cf-report {
+  --cf-radius: 16px;
+  --cf-radius-small: 10px;
+  --cf-lift: 3px;
+  --cf-border: 2px;
+  --cf-sheet: 960px;
+  --cf-font: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --cf-display: 'Fredoka', ui-rounded, 'SF Pro Rounded', 'Trebuchet MS', var(--cf-font);
+  --cf-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  box-sizing: border-box;
+  min-height: 100vh;
+  margin: 0;
+  padding: 40px 16px 64px;
+  background: var(--cf-paper);
+  color: var(--cf-ink);
+  font: 400 15px/1.6 var(--cf-font);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  counter-reset: cf-section cf-figure cf-table;
+}
+
+.cf-report *,
+.cf-report *::before,
+.cf-report *::after {
+  box-sizing: inherit;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+.cf-report ::selection {
+  background: var(--cf-yellow);
+  color: #1d1d1f;
+}
+
+.cf-report a {
+  color: var(--cf-indigo);
+  text-underline-offset: 2px;
+}
+
+.cf-report :focus-visible {
+  outline: 3px solid var(--cf-indigo);
+  outline-offset: 2px;
+}
+
+/* -- layout: a centred sheet with the paper around it; the TOC uses the left margin on wide screens */
+
+.cf-layout {
+  display: grid;
+  grid-template-columns: minmax(0, var(--cf-sheet));
+  justify-content: center;
+  gap: 40px;
+}
+
+.cf-toc {
+  display: none;
+}
+
+@media (min-width: 1440px) {
+  .cf-layout {
+    grid-template-columns: 220px minmax(0, var(--cf-sheet)) 220px;
+  }
+
+  .cf-toc {
+    display: block;
+    position: sticky;
+    top: 40px;
+    align-self: start;
+    max-height: calc(100vh - 80px);
+    overflow: auto;
+    font-size: 0.86rem;
+  }
+}
+
+.cf-sheet {
+  min-width: 0;
+  padding: 48px 56px 40px;
+  background: var(--cf-card);
+  border: var(--cf-border) solid var(--cf-line);
+  border-radius: 22px;
+  box-shadow: 4px 5px 0 var(--cf-shadow);
+}
+
+@media (max-width: 720px) {
+  .cf-report {
+    padding: 16px 12px 40px;
+    font-size: 14.5px;
+  }
+
+  .cf-sheet {
+    padding: 24px 18px;
+    border-radius: var(--cf-radius);
+  }
+}
+
+/* -- header */
+
+.cf-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 4px 18px;
+  align-items: start;
+  padding-bottom: 28px;
+  margin-bottom: 8px;
+  border-bottom: var(--cf-border) solid var(--cf-line);
+}
+
+.cf-logo {
+  grid-row: span 3;
+  width: 56px;
+  height: 56px;
+}
+
+.cf-eyebrow {
+  margin: 0;
+  color: var(--cf-teal);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.cf-title {
+  grid-column: 2;
+  margin: 2px 0 0;
+  font: 650 clamp(2rem, 4.6vw, 2.9rem) / 1.04 var(--cf-display);
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+}
+
+.cf-subtitle {
+  grid-column: 2;
+  margin: 6px 0 0;
+  color: var(--cf-muted);
+  font-size: 1.08rem;
+}
+
+.cf-meta {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 0;
+  list-style: none;
+  font-size: 0.82rem;
+}
+
+.cf-toolbar {
+  grid-column: 3;
+  grid-row: 1;
+  display: flex;
+  gap: 8px;
+}
+
+/* -- pills, buttons */
+
+.cf-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 11px;
+  border-radius: 999px;
+  background: var(--cf-code);
+  color: var(--cf-ink);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cf-pill-draft {
+  background: var(--cf-yellow-soft);
+}
+
+.cf-pill-final {
+  background: var(--cf-teal-soft);
+  color: var(--cf-teal);
+}
+
+.cf-pill-running {
+  background: var(--cf-indigo-soft);
+  color: var(--cf-indigo);
+}
+
+.cf-pill-error {
+  background: var(--cf-pink-soft);
+  color: var(--cf-critical-status);
+}
+
+.cf-pill-pending {
+  background: var(--cf-yellow-soft);
+  color: var(--cf-muted);
+}
+
+.cf-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.cf-pill-running .cf-dot {
+  animation: cf-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes cf-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.cf-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 13px;
+  border: var(--cf-border) solid var(--cf-line);
+  border-radius: 999px;
+  background: var(--cf-card);
+  color: var(--cf-ink);
+  font: 600 0.82rem/1.3 var(--cf-font);
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--cf-shadow);
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+
+.cf-button:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--cf-shadow);
+}
+
+.cf-button:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.cf-button-primary {
+  background: var(--cf-indigo);
+  color: var(--cf-on-accent);
+}
+
+/* Controls that need the runtime appear only when it runs. */
+.cf-js-only,
+.cf-host-only {
+  display: none !important;
+}
+
+.cf-js .cf-js-only {
+  display: inline-flex !important;
+}
+
+.cf-hosted .cf-host-only {
+  display: inline-flex !important;
+}
+
+.cf-js .cf-static {
+  display: none;
+}
+
+.cf-live {
+  display: none;
+}
+
+.cf-js .cf-live {
+  display: block;
+}
+
+.cf-theme-icon::before {
+  content: '◐';
+}
+
+[data-state='light'] > .cf-theme-icon::before {
+  content: '☀';
+}
+
+[data-state='dark'] > .cf-theme-icon::before {
+  content: '☾';
+}
+
+/* -- table of contents */
+
+.cf-toc-title {
+  margin: 0 0 10px;
+  color: var(--cf-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.cf-toc ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cf-toc li {
+  margin: 2px 0;
+}
+
+.cf-toc a {
+  display: flex;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: var(--cf-radius-small);
+  color: var(--cf-ink);
+  text-decoration: none;
+}
+
+.cf-toc a:hover,
+.cf-toc a.cf-current {
+  background: var(--cf-card);
+  box-shadow: inset 0 0 0 1.5px var(--cf-line);
+}
+
+.cf-toc .cf-number {
+  color: var(--cf-teal);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.cf-toc .cf-status {
+  margin-left: auto;
+  color: var(--cf-muted);
+}
+
+/* -- summary and metrics */
+
+.cf-summary {
+  margin: 28px 0 8px;
+  padding: 18px 22px;
+  background: var(--cf-yellow-soft);
+  border: var(--cf-border) solid var(--cf-line);
+  border-radius: var(--cf-radius);
+  box-shadow: var(--cf-lift) var(--cf-lift) 0 var(--cf-shadow);
+}
+
+.cf-summary > .cf-eyebrow {
+  color: var(--cf-muted);
+  margin-bottom: 4px;
+}
+
+.cf-summary .cf-text > :first-child {
+  margin-top: 0;
+}
+
+.cf-summary .cf-text > :last-child {
+  margin-bottom: 0;
+}
+
+.cf-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.cf-metric {
+  padding: 12px 16px;
+  border: 1.5px solid var(--cf-soft-line);
+  border-radius: 14px;
+  background: var(--cf-paper);
+}
+
+.cf-metric-value {
+  display: block;
+  font: 600 1.7rem/1.15 var(--cf-display);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.cf-metric-label {
+  display: block;
+  color: var(--cf-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.cf-metric-note {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.8rem;
+}
+
+.cf-metric[data-status='good'] .cf-metric-note {
+  color: var(--cf-good-status);
+}
+
+.cf-metric[data-status='warning'] .cf-metric-note {
+  color: var(--cf-warning-status);
+}
+
+.cf-metric[data-status='critical'] .cf-metric-note {
+  color: var(--cf-critical-status);
+}
+
+/* -- sections */
+
+.cf-section {
+  counter-increment: cf-section;
+  padding-top: 32px;
+  margin-top: 32px;
+  border-top: 1.5px dashed var(--cf-soft-line);
+  scroll-margin-top: 24px;
+  transition: background 0.6s;
+}
+
+.cf-sheet > [data-cf-slot] > .cf-section:first-child {
+  border-top: 0;
+  margin-top: 8px;
+}
+
+.cf-section .cf-section {
+  counter-increment: none;
+  padding-top: 8px;
+  margin-top: 24px;
+  border-top: 0;
+}
+
+.cf-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-bottom: 8px;
+}
+
+.cf-section-number {
+  color: var(--cf-teal);
+  font: 700 0.8rem/1 var(--cf-font);
+  letter-spacing: 0.13em;
+}
+
+.cf-section-number::before {
+  content: counter(cf-section, decimal-leading-zero);
+}
+
+.cf-report h2 {
+  flex-basis: 100%;
+  margin: 0;
+  font: 620 1.75rem/1.15 var(--cf-display);
+  letter-spacing: -0.025em;
+}
+
+.cf-report h2::after {
+  content: '.';
+  color: var(--cf-teal);
+}
+
+.cf-report h3 {
+  margin: 0;
+  font: 600 1.3rem/1.2 var(--cf-display);
+  letter-spacing: -0.015em;
+}
+
+.cf-report h4,
+.cf-report h5,
+.cf-report h6 {
+  margin: 1.4em 0 0.4em;
+  font: 600 1.05rem/1.3 var(--cf-font);
+}
+
+.cf-section-description {
+  flex-basis: 100%;
+  margin: 2px 0 0;
+  color: var(--cf-muted);
+  font-size: 1rem;
+}
+
+.cf-section-source {
+  margin: 14px 0 0;
+  color: var(--cf-muted);
+  font-size: 0.76rem;
+}
+
+.cf-section-source code {
+  font-size: inherit;
+}
+
+.cf-changed {
+  animation: cf-flash 2.4s ease-out;
+}
+
+@keyframes cf-flash {
+  0% {
+    background: var(--cf-yellow-soft);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+.cf-pending-body {
+  margin-top: 12px;
+  padding: 18px 20px;
+  border: 1.5px dashed var(--cf-soft-line);
+  border-radius: var(--cf-radius);
+  color: var(--cf-muted);
+}
+
+.cf-skeleton {
+  height: 10px;
+  margin-top: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--cf-soft-line), var(--cf-code), var(--cf-soft-line));
+  background-size: 200% 100%;
+  animation: cf-shimmer 1.6s linear infinite;
+}
+
+.cf-skeleton:nth-child(3) {
+  width: 72%;
+}
+
+@keyframes cf-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* -- text */
+
+.cf-text {
+  max-width: 72ch;
+}
+
+.cf-text p,
+.cf-text ul,
+.cf-text ol {
+  margin: 0.7em 0;
+}
+
+.cf-text li + li {
+  margin-top: 0.25em;
+}
+
+.cf-text img {
+  max-width: 100%;
+  height: auto;
+}
+
+.cf-text blockquote {
+  margin: 1em 0;
+  padding: 2px 16px;
+  border-left: 3px solid var(--cf-yellow);
+  color: var(--cf-muted);
+}
+
+.cf-report code {
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: var(--cf-code);
+  font: 0.86em var(--cf-mono);
+}
+
+.cf-text table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.cf-text th,
+.cf-text td {
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--cf-soft-line);
+  text-align: left;
+}
+
+/* -- figures */
+
+.cf-figure {
+  counter-increment: cf-figure;
+  margin: 22px 0;
+}
+
+.cf-figure img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+  border-radius: var(--cf-radius-small);
+  background: #ffffff;
+  cursor: zoom-in;
+}
+
+.cf-figure-narrow img {
+  max-width: min(100%, 560px);
+}
+
+@media (min-width: 1100px) {
+  .cf-figure-wide {
+    margin-inline: -32px;
+  }
+}
+
+.cf-caption,
+.cf-figure figcaption {
+  margin-top: 8px;
+  color: var(--cf-muted);
+  font-size: 0.86rem;
+  max-width: 72ch;
+}
+
+.cf-figure figcaption::before {
+  content: 'Figure ' counter(cf-figure) '. ';
+  color: var(--cf-ink);
+  font-weight: 700;
+}
+
+.cf-plotly-frame {
+  border-radius: var(--cf-radius-small);
+}
+
+.cf-placeholder {
+  display: grid;
+  place-items: center;
+  min-height: 140px;
+  padding: 20px;
+  border: 1.5px dashed var(--cf-soft-line);
+  border-radius: var(--cf-radius-small);
+  color: var(--cf-muted);
+  text-align: center;
+}
+
+.cf-lightbox {
+  max-width: 96vw;
+  max-height: 96vh;
+  padding: 12px;
+  border: var(--cf-border) solid var(--cf-line);
+  border-radius: var(--cf-radius);
+  background: var(--cf-card);
+}
+
+.cf-lightbox::backdrop {
+  background: rgb(29 29 31 / 0.6);
+}
+
+.cf-lightbox img {
+  display: block;
+  max-width: calc(96vw - 28px);
+  max-height: calc(96vh - 76px);
+  margin-bottom: 10px;
+  background: #ffffff;
+}
+
+/* -- tables */
+
+.cf-table-block {
+  counter-increment: cf-table;
+  margin: 22px 0;
+}
+
+.cf-table-wrap {
+  overflow-x: auto;
+  border: 1.5px solid var(--cf-soft-line);
+  border-radius: var(--cf-radius-small);
+}
+
+.cf-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.cf-table th,
+.cf-table td {
+  padding: 6px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px dashed var(--cf-soft-line);
+}
+
+.cf-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--cf-code);
+  border-bottom: 1.5px solid var(--cf-soft-line);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cf-table[data-cf-sortable] thead th {
+  cursor: pointer;
+}
+
+.cf-table thead th[data-sort='asc']::after {
+  content: ' ▲';
+  font-size: 0.7em;
+}
+
+.cf-table thead th[data-sort='desc']::after {
+  content: ' ▼';
+  font-size: 0.7em;
+}
+
+.cf-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.cf-table tbody tr:hover > * {
+  background: var(--cf-paper);
+}
+
+.cf-table .cf-num {
+  text-align: right;
+}
+
+.cf-table .cf-index {
+  color: var(--cf-muted);
+  font-weight: 600;
+}
+
+.cf-table td.cf-flag {
+  background: var(--cf-pink-soft);
+  color: var(--cf-critical-status);
+  font-weight: 700;
+}
+
+.cf-table-block .cf-caption::before {
+  content: 'Table ' counter(cf-table) '. ';
+  color: var(--cf-ink);
+  font-weight: 700;
+}
+
+/* -- callouts */
+
+.cf-callout {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 12px;
+  margin: 20px 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border-left: 4px solid var(--cf-indigo);
+  background: var(--cf-indigo-soft);
+}
+
+.cf-callout-icon {
+  font-size: 1.1rem;
+  line-height: 1.5;
+}
+
+.cf-callout-title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.cf-callout .cf-text {
+  grid-column: 2;
+}
+
+.cf-callout .cf-text > :first-child {
+  margin-top: 0;
+}
+
+.cf-callout .cf-text > :last-child {
+  margin-bottom: 0;
+}
+
+.cf-callout-tip,
+.cf-callout-success {
+  border-color: var(--cf-teal);
+  background: var(--cf-teal-soft);
+}
+
+.cf-callout-warning {
+  border-color: var(--cf-warning-status);
+  background: var(--cf-yellow-soft);
+}
+
+.cf-callout-critical {
+  border-color: var(--cf-critical-status);
+  background: var(--cf-pink-soft);
+}
+
+/* -- code */
+
+.cf-code {
+  margin: 20px 0;
+}
+
+.cf-code summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.cf-code pre {
+  margin: 8px 0 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  border-radius: var(--cf-radius-small);
+  background: var(--cf-code);
+  font: 0.8rem/1.55 var(--cf-mono);
+  tab-size: 4;
+}
+
+.cf-code pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+
+/* Pygments token classes (when pygments is installed). */
+.cf-code .c,
+.cf-code .c1,
+.cf-code .cm,
+.cf-code .ch,
+.cf-code .sd {
+  color: var(--cf-muted);
+  font-style: italic;
+}
+
+.cf-code .k,
+.cf-code .kn,
+.cf-code .kd,
+.cf-code .kc,
+.cf-code .ow {
+  color: var(--cf-indigo);
+  font-weight: 600;
+}
+
+.cf-code .s,
+.cf-code .s1,
+.cf-code .s2,
+.cf-code .sa,
+.cf-code .si {
+  color: var(--cf-teal);
+}
+
+.cf-code .mi,
+.cf-code .mf,
+.cf-code .m {
+  color: var(--cf-warning-status);
+}
+
+.cf-code .nf,
+.cf-code .nc {
+  color: var(--cf-pink);
+  font-weight: 600;
+}
+
+/* -- grid and tabs */
+
+.cf-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cf-columns, 2), minmax(0, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+.cf-grid > * {
+  margin-top: 0;
+}
+
+@media (max-width: 720px) {
+  .cf-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.cf-tabs {
+  margin: 20px 0;
+}
+
+.cf-tabs > input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cf-tab-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.cf-tab-labels label {
+  padding: 4px 14px;
+  border: 1.5px solid var(--cf-soft-line);
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.86rem;
+}
+
+.cf-tab-panel {
+  display: none;
+}
+
+.cf-tab-panel > .cf-tab-print-title {
+  display: none;
+}
+
+/* Up to 12 tabs, without scripts: the nth radio shows the nth panel and marks the nth label. */
+.cf-tabs > input:nth-of-type(1):checked ~ .cf-tab-panels > .cf-tab-panel:nth-child(1),
+.cf-tabs > input:nth-of-type(2):checked ~ .cf-tab-panels > .cf-tab-panel:nth-child(2),
+.cf-tabs > input:nth-of-type(3):checked ~ .cf-tab-panels > .cf-tab-panel:nth-child(3),
+.cf-tabs > input:nth-of-type(4):checked ~ .cf-tab-panels > .cf-tab-panel:nth-child(4),
+.cf-tabs > input:nth-of-type(5):checked ~ .cf-tab-panels > .cf-tab-panel:nth-child(5),
+.cf-tabs > input:nth-of-type(6):checked ~ .cf-tab-panels > .cf-tab-panel:nth-child(6),
+.cf-tabs > input:nth-of-type(7):checked ~ .cf-tab-panels > .cf-tab-panel:nth-child(7),
+.cf-tabs > input:nth-of-type(8):checked ~ .cf-tab-panels > .cf-tab-panel:nth-child(8),
+.cf-tabs > input:nth-of-type(9):checked ~ .cf-tab-panels > .cf-tab-panel:nth-child(9),
+.cf-tabs > input:nth-of-type(10):checked ~ .cf-tab-panels > .cf-tab-panel:nth-child(10),
+.cf-tabs > input:nth-of-type(11):checked ~ .cf-tab-panels > .cf-tab-panel:nth-child(11),
+.cf-tabs > input:nth-of-type(12):checked ~ .cf-tab-panels > .cf-tab-panel:nth-child(12) {
+  display: block;
+}
+
+.cf-tabs > input:nth-of-type(1):checked ~ .cf-tab-labels > label:nth-child(1),
+.cf-tabs > input:nth-of-type(2):checked ~ .cf-tab-labels > label:nth-child(2),
+.cf-tabs > input:nth-of-type(3):checked ~ .cf-tab-labels > label:nth-child(3),
+.cf-tabs > input:nth-of-type(4):checked ~ .cf-tab-labels > label:nth-child(4),
+.cf-tabs > input:nth-of-type(5):checked ~ .cf-tab-labels > label:nth-child(5),
+.cf-tabs > input:nth-of-type(6):checked ~ .cf-tab-labels > label:nth-child(6),
+.cf-tabs > input:nth-of-type(7):checked ~ .cf-tab-labels > label:nth-child(7),
+.cf-tabs > input:nth-of-type(8):checked ~ .cf-tab-labels > label:nth-child(8),
+.cf-tabs > input:nth-of-type(9):checked ~ .cf-tab-labels > label:nth-child(9),
+.cf-tabs > input:nth-of-type(10):checked ~ .cf-tab-labels > label:nth-child(10),
+.cf-tabs > input:nth-of-type(11):checked ~ .cf-tab-labels > label:nth-child(11),
+.cf-tabs > input:nth-of-type(12):checked ~ .cf-tab-labels > label:nth-child(12) {
+  border-color: var(--cf-line);
+  background: var(--cf-ink);
+  color: var(--cf-card);
+}
+
+/* -- explorer */
+
+.cf-explorer {
+  margin: 24px 0;
+  padding: 18px 20px 20px;
+  border: var(--cf-border) solid var(--cf-line);
+  border-radius: var(--cf-radius);
+  box-shadow: var(--cf-lift) var(--cf-lift) 0 var(--cf-shadow);
+}
+
+.cf-explorer-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.cf-explorer-title {
+  margin: 0;
+  flex: 1 1 auto;
+  font: 600 1.15rem/1.3 var(--cf-display);
+}
+
+.cf-explorer-badge {
+  color: var(--cf-teal);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.cf-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px 20px;
+  margin: 14px 0 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--cf-paper);
+}
+
+.cf-control {
+  display: grid;
+  gap: 4px;
+  font-size: 0.84rem;
+}
+
+.cf-control-label {
+  font-weight: 700;
+}
+
+.cf-bound {
+  display: grid;
+  grid-template-columns: 1.6em minmax(0, 1fr) 6.5em;
+  align-items: center;
+  gap: 8px;
+}
+
+.cf-bound-op {
+  color: var(--cf-muted);
+  font-weight: 700;
+  text-align: center;
+}
+
+.cf-control input[type='range'] {
+  width: 100%;
+  accent-color: var(--cf-indigo);
+}
+
+.cf-control input[type='number'],
+.cf-control select {
+  width: 100%;
+  padding: 3px 8px;
+  border: 1.5px solid var(--cf-soft-line);
+  border-radius: 8px;
+  background: var(--cf-card);
+  color: var(--cf-ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.cf-control select[multiple] {
+  min-height: 5.5em;
+}
+
+.cf-stat {
+  margin: 12px 0 4px;
+  font: 600 1.15rem/1.4 var(--cf-display);
+}
+
+.cf-settings-line {
+  margin: 0 0 8px;
+  color: var(--cf-muted);
+  font-size: 0.82rem;
+}
+
+.cf-views {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 18px;
+}
+
+.cf-views > .cf-view-full {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+  .cf-views {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.cf-view-chart {
+  min-height: 300px;
+}
+
+.cf-explorer .cf-static img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-top: 10px;
+  border-radius: var(--cf-radius-small);
+  background: #ffffff;
+}
+
+.cf-static-note {
+  margin: 8px 0 0;
+  color: var(--cf-muted);
+  font-size: 0.8rem;
+}
+
+.cf-error {
+  color: var(--cf-critical-status);
+  font-weight: 600;
+}
+
+/* -- provenance and footer */
+
+.cf-provenance dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 18px;
+  margin: 12px 0;
+  font-size: 0.86rem;
+}
+
+.cf-provenance dt {
+  color: var(--cf-muted);
+  font-weight: 600;
+}
+
+.cf-provenance dd {
+  margin: 0;
+}
+
+.cf-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 40px;
+  padding-top: 18px;
+  border-top: var(--cf-border) solid var(--cf-line);
+  color: var(--cf-muted);
+  font-size: 0.8rem;
+}
+
+.cf-footer svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* -- forced colours (Windows high contrast): drop decoration, keep structure */
+
+@media (forced-colors: active) {
+  .cf-sheet,
+  .cf-summary,
+  .cf-explorer,
+  .cf-button {
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cf-report *,
+  .cf-report *::before,
+  .cf-report *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* -- print: the sheet becomes the page */
+
+@media print {
+  .cf-report {
+    min-height: 0;
+    padding: 0;
+    background: #ffffff;
+    font-size: 10.5pt;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .cf-layout {
+    display: block;
+  }
+
+  .cf-sheet {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: #ffffff;
+  }
+
+  .cf-toc,
+  .cf-toolbar,
+  .cf-controls,
+  .cf-js-only,
+  .cf-host-only,
+  .cf-explorer-actions,
+  .cf-lightbox,
+  .modebar-container {
+    display: none !important;
+  }
+
+  .cf-summary,
+  .cf-explorer,
+  .cf-button {
+    box-shadow: none;
+  }
+
+  .cf-section {
+    break-before: auto;
+    padding-top: 16pt;
+    margin-top: 16pt;
+  }
+
+  .cf-section-head,
+  .cf-report h2,
+  .cf-report h3,
+  .cf-report h4 {
+    break-after: avoid;
+  }
+
+  .cf-figure,
+  .cf-metrics,
+  .cf-metric,
+  .cf-callout,
+  .cf-summary,
+  .cf-table-block .cf-caption,
+  .cf-view-chart,
+  .cf-plotly-frame,
+  tr {
+    break-inside: avoid;
+  }
+
+  .cf-figure img {
+    max-height: 185mm;
+    width: auto;
+    cursor: default;
+  }
+
+  .cf-table-wrap {
+    overflow: visible;
+    border: 0;
+  }
+
+  .cf-table thead {
+    display: table-header-group;
+  }
+
+  .cf-table thead th {
+    position: static;
+  }
+
+  .cf-tab-labels {
+    display: none;
+  }
+
+  .cf-tab-panel {
+    display: block !important;
+    margin-bottom: 14pt;
+  }
+
+  .cf-tab-panel > .cf-tab-print-title {
+    display: block;
+  }
+
+  .cf-pending-body .cf-skeleton {
+    display: none;
+  }
+
+  .cf-figure-wide {
+    margin-inline: 0;
+  }
+
+  .cf-report a {
+    color: inherit;
+  }
+
+  .cf-changed {
+    animation: none;
+  }
+}
