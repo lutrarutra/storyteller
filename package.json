@@ -3,7 +3,7 @@
   "private": true,
   "description": "Node tooling for storyteller: runtime.js unit tests, browser end-to-end checks, vendoring",
   "scripts": {
-    "test": "node --test tests/js/",
+    "test": "node --test \"tests/js/*.test.mjs\"",
     "e2e": "node tests/e2e/check_report.mjs",
     "vendor": "node scripts/vendor.mjs",
     "vendor:check": "node scripts/vendor.mjs --check"
