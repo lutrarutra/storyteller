@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- The README opens with storyteller's icon and links to the other code flower components.
+
 ## 0.2.0
 
 - Comments: readers select text, right-click and leave a note, or a request for the agent;
