@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+
+- The README explains how code flower fits together, and calls the launcher the code flower app.
+
 ## 0.2.1
 
 - The README opens with storyteller's icon and links to the other code flower components.
