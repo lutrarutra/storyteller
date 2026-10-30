@@ -7,7 +7,7 @@
 <p align="center">Standalone HTML reports that tell the story of a data analysis.</p>
 
 <p align="center">
-  <a href="https://github.com/lutrarutra/codeflower-launcher"><img src="https://raw.githubusercontent.com/lutrarutra/codeflower-launcher/main/assets/icon.png" width="20" height="20" alt=""> launcher</a>
+  <a href="https://github.com/lutrarutra/codeflower-app"><img src="https://raw.githubusercontent.com/lutrarutra/codeflower-app/main/assets/icon.png" width="20" height="20" alt=""> app</a>
   &nbsp;·&nbsp;
   <a href="https://github.com/lutrarutra/codeflower-sandbox"><img src="https://raw.githubusercontent.com/lutrarutra/codeflower-sandbox/main/assets/icon.svg" width="20" height="20" alt=""> sandbox</a>
   &nbsp;·&nbsp;

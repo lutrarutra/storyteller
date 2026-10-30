@@ -1,6 +1,6 @@
 """code flower's colours for reports and charts.
 
-The brand tokens are those of the extension's webview and the launcher window
+The brand tokens are those of the extension's webview and the app window
 (paper and ink, with indigo, teal, pink and yellow accents). The chart palettes
 are derived from them and checked with an OKLab colour-vision validator
 (tests/test_palette.py): the categorical order passes lightness, chroma,
