@@ -1,4 +1,22 @@
-# storyteller
+<p align="center">
+  <img src="assets/icon.svg" width="112" height="112" alt="storyteller icon">
+</p>
+
+<h1 align="center">storyteller</h1>
+
+<p align="center">Standalone HTML reports that tell the story of a data analysis.</p>
+
+<p align="center">
+  <a href="https://github.com/lutrarutra/codeflower-launcher"><img src="https://raw.githubusercontent.com/lutrarutra/codeflower-launcher/main/assets/icon.png" width="20" height="20" alt=""> launcher</a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/lutrarutra/codeflower-sandbox"><img src="https://raw.githubusercontent.com/lutrarutra/codeflower-sandbox/main/assets/icon.svg" width="20" height="20" alt=""> sandbox</a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/lutrarutra/codeflower-vsc-extension"><img src="https://raw.githubusercontent.com/lutrarutra/codeflower-vsc-extension/main/media/icon.svg" width="20" height="20" alt=""> VS Code extension</a>
+  &nbsp;·&nbsp;
+  <b><img src="assets/icon.svg" width="20" height="20" alt=""> storyteller</b>
+  &nbsp;·&nbsp;
+  <a href="https://codeflower.dev">codeflower.dev</a>
+</p>
 
 Standalone HTML reports for data analysis, in [code flower](https://codeflower.dev)'s look.
 code flower's sandbox agent uses it to write its reports; it works anywhere Python does.
