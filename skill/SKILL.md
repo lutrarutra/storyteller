@@ -89,6 +89,14 @@ Figures: make them with `sty.theme.use()` active, at their final size (`figsize`
 PNG at 2× density. Big photos and micrographs are resized to 2000 px and compressed.
 `r.figure` closes matplotlib figures for you.
 
+Schematics (the study design, a workflow, a graphical abstract) are drawn, not plotted. In
+code flower, draw them with the codeflower-sketch skill and embed the SVG file with
+`r.figure("figures/design.svg", caption="… Icons: <credit line>", key="design")`: put the credit
+line `codeflower-sketch credits` prints in the caption. A report that explains a study opens best
+with one, in its first section. The SVG keeps its element ids in the report, so the user can click
+its parts and comment on them; their feedback names the figure ("figure 1 … in reports/x.html").
+Change the SVG file, then embed it again under the same key.
+
 ## Interactive explorer
 
 Use it when a number in the report depends on a cut-off the user may want to set
