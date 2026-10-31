@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3
+
+- The skill tells the agent to draw schematics (a study design, a workflow) with the
+  codeflower-sketch skill and embed them as SVG figures, whose parts the user can comment on.
+
 ## 0.2.2
 
 - The README explains how code flower fits together, and calls the launcher the code flower app.
