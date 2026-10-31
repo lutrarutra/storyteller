@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- The header names the agent and model that wrote the report ("Claude Code · Opus 5.5"), as code
+  flower's bridge records them for the chat running the script (`$CODEFLOWER_SESSION_INFO_DIR`).
+  `Report` and `Report.open` take `agent=` and `model=` to set them by hand.
+
 ## 0.2.5
 
 - The README links the code flower tunnel with the other components.
