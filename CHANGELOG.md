@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.5
+
+- The README links the code flower tunnel with the other components.
+
 ## 0.2.4
 
 - The skill tells the agent to keep the summary at the top of the report, with `r.summary`,
