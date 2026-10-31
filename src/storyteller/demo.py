@@ -50,6 +50,8 @@ def build(path: Path) -> Path:
         path,
         subtitle="Two donors, simulated 10x 3′ data · demo of storyteller",
         author="code flower agent",
+        agent="Claude Code",
+        model="Opus 5.5",
     )
     keep = (cells.n_genes >= 500) & (cells.pct_mt <= 15)
     report.summary(

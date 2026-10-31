@@ -16,6 +16,7 @@ from __future__ import annotations
 import atexit
 import contextlib
 import json
+import os
 import platform
 import re
 import shutil
@@ -105,6 +106,34 @@ def _find(nodes: list[dict[str, Any]], key: str) -> tuple[list[dict[str, Any]], 
     return None
 
 
+SESSION_ENV = ("CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID")
+
+
+def running_agent(environ: Mapping[str, str] = os.environ) -> dict[str, str]:
+    """The agent and model that run this script, as code flower's bridge records them
+    (``$CODEFLOWER_SESSION_INFO_DIR/<session>.json``). The session is the one the agent
+    names in its environment, or else the only chat with a turn running; outside code
+    flower, nothing."""
+    directory = environ.get("CODEFLOWER_SESSION_INFO_DIR")
+    if not directory:
+        return {}
+    session = next((environ[name] for name in SESSION_ENV if environ.get(name)), None)
+    if session is not None and not re.fullmatch(r"[A-Za-z0-9._-]{1,128}", session):
+        return {}
+    paths = [Path(directory) / f"{session}.json"] if session else sorted(Path(directory).glob("*.json"))
+    found = []
+    for path in paths:
+        try:
+            info = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(info, dict) and (session or info.get("turn") is True):
+            found.append(info)
+    if len(found) != 1:
+        return {}
+    return {name: value for name in ("agent", "model") if isinstance(value := found[0].get(name), str) and value}
+
+
 class Report:
     """A report under construction. See the module docstring and the skill for the workflow."""
 
@@ -115,6 +144,8 @@ class Report:
         *,
         subtitle: str | None = None,
         author: str | None = None,
+        agent: str | None = None,
+        model: str | None = None,
         date: str | None = None,
         page: Literal["A4", "letter"] = "A4",
         max_bytes: int = DEFAULT_MAX_BYTES,
@@ -129,10 +160,13 @@ class Report:
         self._doc = empty_document()
         self._meta_changes: dict[str, Any] = {}
         # A report written once is final; a live report (Report.open) is a draft until finalize().
+        running = running_agent()
         self._set_meta(
             title=title,
             subtitle=subtitle,
             author=author,
+            agent=agent or running.get("agent"),
+            model=model or running.get("model"),
             page=page,
             date=date or datetime.now().date().isoformat(),
             final=True,
@@ -157,6 +191,8 @@ class Report:
         *,
         subtitle: str | None = None,
         author: str | None = None,
+        agent: str | None = None,
+        model: str | None = None,
         page: Literal["A4", "letter"] | None = None,
         max_bytes: int = DEFAULT_MAX_BYTES,
         fonts: bool = True,
@@ -186,7 +222,15 @@ class Report:
             report._doc = existing
         if existing is None or title is not None:
             report._set_meta(title=title or existing["meta"].get("title"))
-        report._set_meta(subtitle=subtitle, author=author, page=page)
+        # The agent and model that run this script: the latest to write it.
+        running = running_agent()
+        report._set_meta(
+            subtitle=subtitle,
+            author=author,
+            agent=agent or running.get("agent"),
+            model=model or running.get("model"),
+            page=page,
+        )
         if existing is None:
             report._set_meta(date=datetime.now().date().isoformat(), page=page or "A4")
         _open_reports.add(report)

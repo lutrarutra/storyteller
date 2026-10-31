@@ -600,6 +600,11 @@ def _header(meta: dict[str, Any], draft: bool, sections: list[dict[str, Any]]) -
         pills.append(f'<li class="cf-pill">{escape(_date(meta["date"]))}</li>')
     if meta.get("author"):
         pills.append(f'<li class="cf-pill">{escape(meta["author"])}</li>')
+    written_by = " · ".join(meta[name] for name in ("agent", "model") if meta.get(name))
+    if written_by:
+        pills.append(
+            f'<li class="cf-pill cf-pill-model" title="Agent and model that wrote the report">{escape(written_by)}</li>'
+        )
     if draft:
         counts = {
             status: sum(1 for s in sections if s.get("status") == status) for status in ("pending", "running", "error")

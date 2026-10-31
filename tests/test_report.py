@@ -11,6 +11,7 @@ import pytest
 
 import storyteller as sty
 from storyteller import check
+from storyteller import report as report_module
 from storyteller.interactive import explorer as ex
 from storyteller.interactive import pack
 from storyteller.render import asset_bytes
@@ -32,6 +33,42 @@ def test_in_memory_report_is_self_contained_and_final(tmp_path):
     assert "Test &lt;report&gt;" in html
     assert 'class="cf-pill cf-pill-final"' in html and ">Draft" not in html
     assert _sections(html) == ["data"]
+
+
+def test_header_names_the_author_agent_and_model(tmp_path, monkeypatch):
+    monkeypatch.delenv("CODEFLOWER_SESSION_INFO_DIR", raising=False)
+    report = sty.Report.open(
+        tmp_path / "r", title="x", author="code flower agent", agent="Claude Code", model="Opus <5.5>"
+    )
+    assert sty.Report.open(tmp_path / "r")._doc["meta"]["model"] == "Opus <5.5>"
+    html = report.render()
+    assert '<li class="cf-pill">code flower agent</li>' in html
+    assert ">Claude Code · Opus &lt;5.5&gt;</li>" in html
+    assert "cf-pill-model" not in sty.Report("x").render()
+
+
+def test_agent_and_model_come_from_the_chat_running_the_script(tmp_path, monkeypatch):
+    info = tmp_path / "sessions"
+    info.mkdir()
+    (info / "a.json").write_text(json.dumps({"agent": "Claude Code", "model": "Opus 5.5", "turn": False}))
+    (info / "b.json").write_text(json.dumps({"agent": "Codex", "model": "GPT-6", "turn": True}))
+    monkeypatch.setenv("CODEFLOWER_SESSION_INFO_DIR", str(info))
+    for name in report_module.SESSION_ENV:
+        monkeypatch.delenv(name, raising=False)
+    # No session named: the only chat with a turn running.
+    assert report_module.running_agent() == {"agent": "Codex", "model": "GPT-6"}
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "a")
+    report = sty.Report.open(tmp_path / "r", title="x")
+    assert ">Claude Code · Opus 5.5</li>" in report.render()
+    # A later script run by another chat, or by hand, names its own.
+    assert sty.Report.open(tmp_path / "r", model="Sonnet 5.5")._doc["meta"]["model"] == "Sonnet 5.5"
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "../b")
+    assert report_module.running_agent() == {}
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "missing")
+    assert report_module.running_agent() == {}
+    (info / "c.json").write_text(json.dumps({"agent": "dsh", "turn": True}))
+    monkeypatch.delenv("CLAUDE_CODE_SESSION_ID")
+    assert report_module.running_agent() == {}
 
 
 def test_footer_links_to_storyteller_github_without_interactive_label():
