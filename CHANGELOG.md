@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.4
+
+- The skill tells the agent to keep the summary at the top of the report, with `r.summary`,
+  instead of ending it with a summary or conclusions section of its own.
+
 ## 0.2.3
 
 - The skill tells the agent to draw schematics (a study design, a workflow) with the
