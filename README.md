@@ -17,11 +17,11 @@
   &nbsp;·&nbsp;
   <a href="https://github.com/lutrarutra/codeflower-tunnel"><img src="https://raw.githubusercontent.com/lutrarutra/codeflower-tunnel/main/assets/icon.png" width="20" height="20" alt=""> tunnel</a>
   &nbsp;·&nbsp;
-  <a href="https://codeflower.dev">codeflower.dev</a>
+  <a href="https://docs.codeflower.app">docs.codeflower.app</a>
 </p>
 
 A Python library for single-file HTML reports of a data analysis, with figures, interactive charts,
-cross-references and reader comments, in [code flower](https://codeflower.dev)'s look. code flower's
+cross-references and reader comments, in [code flower](https://docs.codeflower.app)'s look. code flower's
 agent writes its reports with it; it works anywhere Python does.
 
 ## Install

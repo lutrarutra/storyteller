@@ -1,4 +1,4 @@
-/* storyteller: code flower's paper-and-ink look (codeflower.dev, the extension, the app).
+/* storyteller: code flower's paper-and-ink look (the docs at docs.codeflower.app, the extension, the app).
  *
  * Tokens live on .cf-report rather than :root so the report also styles itself
  * inside a host that embeds only its body (VS Code's sanitised preview). The
