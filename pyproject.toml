@@ -37,7 +37,7 @@ Homepage = "https://github.com/lutrarutra/storyteller"
 packages = ["src/storyteller"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src", "skill", "tests", "scripts", "examples", "README.md", "LICENSE", "CHANGELOG.md"]
+include = ["src", "skill", "tests", "scripts", "examples", "README.md", "LICENSE", "docs/CHANGELOG.md"]
 
 [tool.ruff]
 line-length = 120
