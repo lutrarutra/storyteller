@@ -13,20 +13,13 @@ Two ways to use it:
 
 from __future__ import annotations
 
-import atexit
 import contextlib
 import json
-import os
 import platform
 import re
 import shutil
 import subprocess
 import sys
-import threading
-import time
-import traceback
-import unicodedata
-import weakref
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -37,12 +30,12 @@ from typing import Any, Literal
 
 from . import adapters, markdown, render, tables
 from . import comments as reader_comments
+from .document import LiveDocument, find, now, running_agent, slugify
 from .images import Asset, shrink
 from .interactive import explorer as ex
-from .store import DiskStore, MemoryStore, asset_meta, empty_document, referenced_assets
+from .store import DiskStore, atomic_write, referenced_assets
 
 DEFAULT_MAX_BYTES = 9_500_000  # VS Code's preview reads files up to 10 MB
-SAVE_INTERVAL_S = 0.5
 EXPLORER_MAX_ROWS = 200_000
 
 CalloutKind = Literal["note", "tip", "success", "warning", "critical"]
@@ -74,67 +67,26 @@ class Metric:
     status: Literal["good", "warning", "critical"] | None = None
 
 
-def slugify(text: str) -> str:
-    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
-    slug = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
-    return slug or "section"
+def metric_entries(
+    items: Mapping[str, Any] | Sequence[Metric | Mapping[str, Any] | tuple[Any, ...]],
+) -> list[dict[str, str]]:
+    """Metrics as {label, value, note, status} strings, with numbers formatted."""
+    entries: list[dict[str, str]] = []
+    source = items.items() if isinstance(items, Mapping) else items
+    for item in source:
+        if isinstance(item, Metric):
+            entry = {"label": item.label, "value": item.value, "note": item.note, "status": item.status}
+        elif isinstance(item, Mapping):
+            entry = dict(item)
+        else:
+            entry = dict(zip(("label", "value", "note", "status"), item, strict=False))
+        value = entry["value"]
+        entry["value"] = value if isinstance(value, str) else tables.format_value(value)
+        entries.append({k: str(v) for k, v in entry.items() if v is not None})
+    return entries
 
 
-def _now() -> str:
-    return datetime.now().astimezone().isoformat(timespec="seconds")
-
-
-def _script_name() -> str | None:
-    main = sys.modules.get("__main__")
-    path = getattr(main, "__file__", None) or (sys.argv[0] if sys.argv and sys.argv[0] else None)
-    if not path or path in ("-c", "-m") or not str(path).endswith(".py"):
-        return None
-    try:
-        return str(Path(path).resolve().relative_to(Path.cwd()))
-    except ValueError:
-        return Path(path).name
-
-
-def _find(nodes: list[dict[str, Any]], key: str) -> tuple[list[dict[str, Any]], int] | None:
-    """The list holding the keyed node and its index, searching nested sections too."""
-    for index, node in enumerate(nodes):
-        if node.get("key") == key:
-            return nodes, index
-        found = _find(node.get("children", []), key)
-        if found:
-            return found
-    return None
-
-
-SESSION_ENV = ("CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID")
-
-
-def running_agent(environ: Mapping[str, str] = os.environ) -> dict[str, str]:
-    """The agent and model that run this script, as code flower's bridge records them
-    (``$CODEFLOWER_SESSION_INFO_DIR/<session>.json``). The session is the one the agent
-    names in its environment, or else the only chat with a turn running; outside code
-    flower, nothing."""
-    directory = environ.get("CODEFLOWER_SESSION_INFO_DIR")
-    if not directory:
-        return {}
-    session = next((environ[name] for name in SESSION_ENV if environ.get(name)), None)
-    if session is not None and not re.fullmatch(r"[A-Za-z0-9._-]{1,128}", session):
-        return {}
-    paths = [Path(directory) / f"{session}.json"] if session else sorted(Path(directory).glob("*.json"))
-    found = []
-    for path in paths:
-        try:
-            info = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        if isinstance(info, dict) and (session or info.get("turn") is True):
-            found.append(info)
-    if len(found) != 1:
-        return {}
-    return {name: value for name in ("agent", "model") if isinstance(value := found[0].get(name), str) and value}
-
-
-class Report:
+class Report(LiveDocument):
     """A report under construction. See the module docstring and the skill for the workflow."""
 
     def __init__(
@@ -152,13 +104,10 @@ class Report:
         fonts: bool = True,
         base_dir: str | Path | None = None,
     ) -> None:
-        self.path = Path(path) if path else None
+        super().__init__(path)
         self.max_bytes = max_bytes
         self.fonts = fonts
         self.base_dir = Path(base_dir) if base_dir else Path.cwd()
-        self._store: MemoryStore | DiskStore = MemoryStore()
-        self._doc = empty_document()
-        self._meta_changes: dict[str, Any] = {}
         # A report written once is final; a live report (Report.open) is a draft until finalize().
         running = running_agent()
         self._set_meta(
@@ -171,15 +120,6 @@ class Report:
             date=date or datetime.now().date().isoformat(),
             final=True,
         )
-        self._stack: list[dict[str, Any]] = []  # open containers (sections, grids, tabs)
-        self._touched: dict[str, None] = {}  # top-level or section keys this process wrote, in order
-        self._removed: set[str] = set()
-        self._auto_keys: dict[str, int] = {}
-        self._lock = threading.RLock()
-        self._dirty = False
-        self._last_save = 0.0
-        self._timer: threading.Timer | None = None
-        self._live = False
 
     # -- opening and saving ---------------------------------------------------------------
 
@@ -214,12 +154,7 @@ class Report:
             fonts=fonts,
             base_dir=base_dir,
         )
-        report._store = store
-        report._live = True
-        report._meta_changes = {}
-        report._doc["meta"]["final"] = False
-        if existing is not None:
-            report._doc = existing
+        report._go_live(store, existing)
         if existing is None or title is not None:
             report._set_meta(title=title or existing["meta"].get("title"))
         # The agent and model that run this script: the latest to write it.
@@ -233,28 +168,8 @@ class Report:
         )
         if existing is None:
             report._set_meta(date=datetime.now().date().isoformat(), page=page or "A4")
-        _open_reports.add(report)
         report.save()
         return report
-
-    def _set_meta(self, **values: Any) -> None:
-        for name, value in values.items():
-            if value is None:
-                continue
-            self._doc["meta"][name] = value
-            self._meta_changes[name] = value
-
-    @property
-    def store_dir(self) -> Path | None:
-        return self._store.directory
-
-    def _asset(self, sha: str) -> Asset:
-        return self._store.get(sha, self._doc.get("assets"))
-
-    def _put(self, asset: Asset) -> str:
-        sha = self._store.put(asset)
-        self._doc.setdefault("assets", {})[sha] = asset_meta(asset)
-        return sha
 
     def render(
         self,
@@ -286,154 +201,11 @@ class Report:
         middle = [n for n in nodes if n not in first and n not in second and n not in last]
         return {**self._doc, "nodes": first + second + middle + last}
 
-    def save(self, path: str | Path | None = None) -> Path:
-        """Writes the HTML (and, for a stored report, its document) now."""
-        with self._lock:
-            if self._timer:
-                self._timer.cancel()
-                self._timer = None
-            target = Path(path) if path else self.path
-            if target is None:
-                raise ValueError("no path: pass save(path) or Report(..., path=...)")
-            with self._store.lock():
-                if self._live:
-                    self._merge_from_disk()
-                    self._doc["meta"]["updated"] = _now()
-                    self._store.write(self._doc)
-                html = self.render(comments=self._comments(target))
-                from .store import atomic_write
-
-                atomic_write(target, html.encode("utf-8"))
-            self._dirty = False
-            self._last_save = time.monotonic()
-            # What was written is on disk now; later saves only carry later changes (and the open section).
-            open_key = self._stack[0].get("key") if self._stack else None
-            self._touched = {open_key: None} if open_key else {}
-            self._removed.clear()
-            self._meta_changes = {}
-            return target
-
-    def _merge_from_disk(self) -> None:
-        """Applies this process's changes onto the document on disk, which other scripts may have changed."""
-        disk = self._store.load()
-        if disk is None:
-            return
-        local = self._doc
-        merged = disk
-        merged["meta"].update(self._meta_changes)
-        merged.setdefault("assets", {}).update(local.get("assets", {}))
-        for key in self._removed:
-            found = _find(merged["nodes"], key)
-            if found:
-                del found[0][found[1]]
-        local_keys = [node.get("key") for node in local["nodes"]]
-        for key in self._touched:
-            found_local = _find(local["nodes"], key)
-            if not found_local:
-                continue
-            node = found_local[0][found_local[1]]
-            found = _find(merged["nodes"], key)
-            if found:
-                found[0][found[1]] = node
-                continue
-            # New on disk: after the nearest earlier top-level sibling that disk already has.
-            position = 0
-            if key in local_keys:
-                for previous in reversed(local_keys[: local_keys.index(key)]):
-                    hit = next((i for i, n in enumerate(merged["nodes"]) if n.get("key") == previous), None)
-                    if hit is not None:
-                        position = hit + 1
-                        break
-                else:
-                    position = len(merged["nodes"]) if local_keys.index(key) else 0
-            else:
-                position = len(merged["nodes"])
-            merged["nodes"].insert(position, node)
-        # Keep the open containers pointing into the merged tree.
-        self._doc = merged
-        self._rebind_stack()
-
-    def _rebind_stack(self) -> None:
-        if not self._stack:
-            return
-        top = self._stack[0]
-        found = _find(self._doc["nodes"], top["key"]) if top.get("key") else None
-        if found and found[0][found[1]] is not top:
-            found[0][found[1]] = top  # this process's open section wins
-
-    def _changed(self) -> None:
-        """Schedules a save: at once if the last one was a while ago, else at the end of the interval."""
-        self._dirty = True
-        if not self._live:
-            return
-        wait = SAVE_INTERVAL_S - (time.monotonic() - self._last_save)
-        if wait <= 0:
-            self.save()
-        elif self._timer is None:
-            self._timer = threading.Timer(wait, self._flush)
-            self._timer.daemon = True
-            self._timer.start()
-
-    def _flush(self) -> None:
-        with self._lock:
-            self._timer = None
-            if self._dirty:
-                self.save()
-
-    def close(self) -> None:
-        """Saves pending changes (also done automatically when the script ends)."""
-        with self._lock:
-            if self._dirty and (self._live or self.path):
-                self.save()
-
-    def __enter__(self) -> Report:
-        return self
-
-    def __exit__(self, *exc: Any) -> None:
-        self.close()
+    def _write(self, target: Path) -> None:
+        html = self.render(comments=self._comments(target))
+        atomic_write(target, html.encode("utf-8"))
 
     # -- structure ---------------------------------------------------------------------------
-
-    def _container(self) -> list[dict[str, Any]] | None:
-        """The children list new blocks go into, or None at the top level."""
-        if not self._stack:
-            return None
-        return self._stack[-1]["children"]
-
-    def _auto_key(self, kind: str) -> str:
-        script = Path(_script_name() or "session").stem
-        count = self._auto_keys.get(kind, 0) + 1
-        self._auto_keys[kind] = count
-        return f"{slugify(script)}-{kind}-{count}"
-
-    def _add(self, node: dict[str, Any], key: str | None = None) -> str | None:
-        with self._lock:
-            container = self._container()
-            if container is not None:
-                if key:
-                    node["key"] = key
-                container.append(node)
-                self._touch_open()
-            else:
-                node["key"] = key or self._auto_key(node["type"])
-                self._upsert_top(node)
-            self._changed()
-            return node.get("key")
-
-    def _upsert_top(self, node: dict[str, Any]) -> None:
-        found = _find(self._doc["nodes"], node["key"])
-        if found:
-            found[0][found[1]] = node
-        else:
-            self._doc["nodes"].append(node)
-        self._touched[node["key"]] = None
-        self._removed.discard(node["key"])
-
-    def _touch_open(self) -> None:
-        if self._stack:
-            outermost = self._stack[0]
-            outermost["updated"] = _now()
-            self._touched[outermost["key"]] = None
 
     @contextlib.contextmanager
     def section(
@@ -446,63 +218,21 @@ class Report:
         """
         key, heading = (key_or_title, title) if title else (slugify(key_or_title), key_or_title)
         key = slugify(key)
-        with self._lock:
-            if self._live and self._doc["meta"].get("final"):
-                self._set_meta(final=False)
-            node = {
-                "type": "section",
-                "key": key,
-                "title": heading,
-                "status": "running",
-                "children": [],
-                "updated": _now(),
-            }
-            if description:
-                node["description"] = description
-            source = _script_name()
-            if source:
-                node["source"] = source
-            container = self._container()
-            if container is None:
-                found = _find(self._doc["nodes"], key)
-                if found and found[0][found[1]].get("description") and not description:
-                    node["description"] = found[0][found[1]]["description"]
-                self._upsert_top(node)
-            else:
-                container.append(node)
-                self._touch_open()
-            self._stack.append(node)
-            self._changed()
-        try:
+        node = {"type": "section", "key": key, "title": heading, "status": "running", "children": [], "updated": now()}
+        if description:
+            node["description"] = description
+        elif not self._stack:
+            found = find(self._doc["nodes"], key)
+            if found and found[0][found[1]].get("description"):
+                node["description"] = found[0][found[1]]["description"]
+        with self._filling(node):
             yield self
-        except BaseException as error:
-            with self._lock:
-                node["status"] = "error"
-                node["error"] = "".join(traceback.format_exception_only(type(error), error)).strip()[-2000:]
-                self._stack.pop()
-                if not self._stack:
-                    self._touched[key] = None
-                self._dirty = True
-                if self._live:
-                    self.save()
-            raise
-        else:
-            with self._lock:
-                node["status"] = "ready"
-                node["updated"] = _now()
-                self._stack.pop()
-                self._touch_open()
-                self._dirty = True
-                if self._live and not self._stack:
-                    self.save()
-                else:
-                    self._changed()
 
     def pending(self, key: str, title: str, *, note: str | None = None, description: str | None = None) -> None:
         """Announces a section that a later script will fill. An existing section keeps its content."""
         key = slugify(key)
         with self._lock:
-            found = _find(self._doc["nodes"], key)
+            found = find(self._doc["nodes"], key)
             if found and found[0][found[1]].get("status") not in ("pending", None):
                 return
             node = {"type": "section", "key": key, "title": title, "status": "pending", "children": []}
@@ -556,38 +286,6 @@ class Report:
             with self._lock:
                 self._stack.pop()
                 self._changed()
-
-    def remove(self, key: str) -> bool:
-        """Removes a section or keyed block. Returns whether it existed."""
-        with self._lock:
-            found = _find(self._doc["nodes"], key)
-            if not found:
-                return False
-            del found[0][found[1]]
-            self._removed.add(key)
-            self._touched.pop(key, None)
-            self._changed()
-            return True
-
-    def move(self, key: str, *, before: str | None = None, after: str | None = None) -> None:
-        """Moves a top-level section or block before or after another one."""
-        with self._lock:
-            nodes = self._doc["nodes"]
-            index = next((i for i, n in enumerate(nodes) if n.get("key") == key), None)
-            if index is None:
-                raise KeyError(f"no top-level section or block {key!r}")
-            node = nodes.pop(index)
-            anchor = before or after
-            target = next((i for i, n in enumerate(nodes) if n.get("key") == anchor), None)
-            if target is None:
-                nodes.insert(index, node)
-                raise KeyError(f"no top-level section or block {anchor!r}")
-            nodes.insert(target if before else target + 1, node)
-            # Order is not merged node by node: write the whole order.
-            for other in nodes:
-                if other.get("key"):
-                    self._touched[other["key"]] = None
-            self._changed()
 
     def outline(self) -> str:
         """The report's structure, one line per section or top-level block, with keys and status.
@@ -666,19 +364,7 @@ class Report:
         """Headline numbers as tiles: ``{"Cells": 10234}`` or ``[Metric("Cells", 10234, note="after QC")]``.
 
         Outside a section, one metrics row with the default key sits under the summary."""
-        entries: list[dict[str, Any]] = []
-        source = items.items() if isinstance(items, Mapping) else items
-        for item in source:
-            if isinstance(item, Metric):
-                entry = {"label": item.label, "value": item.value, "note": item.note, "status": item.status}
-            elif isinstance(item, Mapping):
-                entry = dict(item)
-            else:
-                entry = dict(zip(("label", "value", "note", "status"), item, strict=False))
-            value = entry["value"]
-            entry["value"] = value if isinstance(value, str) else tables.format_value(value)
-            entries.append({k: str(v) for k, v in entry.items() if v is not None})
-        node = {"type": "metrics", "items": entries}
+        node = {"type": "metrics", "items": metric_entries(items)}
         if self._container() is None and key is None:
             key = "metrics"
         return self._add(node, key)
@@ -821,7 +507,7 @@ class Report:
         node = {
             "type": "provenance",
             "key": "provenance",
-            "generated": _now(),
+            "generated": now(),
             "python": platform.python_version(),
             "platform": f"{platform.system()} {platform.machine()}",
             "packages": versions,
@@ -1090,15 +776,5 @@ def _highlight(code: str, language: str | None) -> str | None:
 
 # Reports opened live are saved when the interpreter exits, in case the script ended
 # between autosaves.
-_open_reports: weakref.WeakSet[Report] = weakref.WeakSet()
-
-
-@atexit.register
-def _save_open_reports() -> None:
-    for report in list(_open_reports):
-        with contextlib.suppress(Exception):
-            report.close()
-
-
 def escape_text(text: str) -> str:  # re-exported for custom html blocks
     return escape(text)

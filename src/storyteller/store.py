@@ -2,8 +2,8 @@
 
 A store directory (``reports/pbmc.report/``) holds:
 
-- ``report.json``: the document (metadata, the tree of sections and blocks, and an
-  index of the assets it uses);
+- ``report.json`` (``deck.json`` for a deck): the document (metadata, the tree of
+  sections and blocks, and an index of the assets it uses);
 - ``assets/<sha256>.<ext>``: encoded images, plotly specs and packed datasets,
   written once and named by their content;
 - ``.lock``: taken while a process reads, merges and writes the document, so
@@ -89,10 +89,10 @@ class MemoryStore:
 
 
 class DiskStore:
-    def __init__(self, directory: Path) -> None:
+    def __init__(self, directory: Path, document: str = "report.json") -> None:
         self.directory = directory
         self.assets_dir = directory / "assets"
-        self.document_path = directory / "report.json"
+        self.document_path = directory / document
         self._cache: dict[str, Asset] = {}
 
     def _asset_path(self, sha: str, mime: str) -> Path:

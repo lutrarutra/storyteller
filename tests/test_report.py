@@ -11,7 +11,7 @@ import pytest
 
 import storyteller as sty
 from storyteller import check
-from storyteller import report as report_module
+from storyteller import document as report_module
 from storyteller.interactive import explorer as ex
 from storyteller.interactive import pack
 from storyteller.render import asset_bytes
