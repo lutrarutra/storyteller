@@ -26,6 +26,11 @@ COMMENTS_PATH = "/comments"
 MAX_COMMENTS_BYTES = 2 * 1024 * 1024
 POLL_S = 0.5
 LIVE_META = f'<meta name="cf-live" content="{EVENTS_PATH}">'
+# A deck's files beside its viewer, served for its download button.
+DOWNLOADS = {
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".pdf": "application/pdf",
+}
 
 
 def _version(path: Path) -> tuple[float, int]:
@@ -57,6 +62,10 @@ def serve(html_path: Path, host: str = "127.0.0.1", port: int = 8765) -> None:
         def do_GET(self) -> None:  # noqa: N802 - http.server API
             if self.path.split("?")[0] == EVENTS_PATH:
                 self._events()
+                return
+            beside = {f"/{html_path.with_suffix(suffix).name}": suffix for suffix in DOWNLOADS}
+            if self.path.split("?")[0] in beside:
+                self._file(html_path.with_suffix(beside[self.path.split("?")[0]]))
                 return
             if self.path.split("?")[0] not in ("/", f"/{html_path.name}"):
                 self.send_error(HTTPStatus.NOT_FOUND)
@@ -97,6 +106,20 @@ def serve(html_path: Path, host: str = "127.0.0.1", port: int = 8765) -> None:
             body = json.dumps({"saved": len(saved)}).encode("utf-8")
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _file(self, path: Path) -> None:
+            """A deck's .pptx or .pdf, next to its viewer, as a download."""
+            try:
+                body = path.read_bytes()
+            except FileNotFoundError:
+                self.send_error(HTTPStatus.NOT_FOUND)
+                return
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", DOWNLOADS[path.suffix])
+            self.send_header("Content-Disposition", f'attachment; filename="{path.name}"')
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)

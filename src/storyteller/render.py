@@ -594,7 +594,7 @@ def _with_part(name: str, digest: str) -> str:
     return f' data-cf-part="{escape(name)}" data-cf-hash="{digest}"'
 
 
-def _header(meta: dict[str, Any], draft: bool, sections: list[dict[str, Any]]) -> str:
+def _header(meta: dict[str, Any], draft: bool, sections: list[dict[str, Any]], buttons: str = "") -> str:
     pills = []
     if meta.get("date"):
         pills.append(f'<li class="cf-pill">{escape(_date(meta["date"]))}</li>')
@@ -622,6 +622,7 @@ def _header(meta: dict[str, Any], draft: bool, sections: list[dict[str, Any]]) -
         '<button type="button" class="cf-button cf-js-only" data-cf-action="theme" '
         'title="Toggle light/dark theme (follows system preference by default)">'
         '<span class="cf-theme-icon" aria-hidden="true"></span>Theme</button>'
+        f"{buttons}"
         '<button type="button" class="cf-button cf-js-only" data-cf-action="print" title="Print or save as PDF">Print / PDF</button>'
         "</div>"
     )

@@ -130,7 +130,7 @@ def paths(report: str | Path) -> tuple[Path, Path]:
 
 
 def _stored(store: Path) -> bool:
-    return (store / "report.json").is_file()
+    return (store / "report.json").is_file() or (store / "deck.json").is_file()
 
 
 def _read_store(store: Path) -> list[dict[str, Any]] | None:

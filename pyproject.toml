@@ -25,7 +25,19 @@ classifiers = [
 # objects of theirs are passed in; nothing requires them.
 plot = ["matplotlib>=3.8", "plotly>=5.20", "pandas>=2.0", "numpy>=1.26"]
 pdf = ["playwright>=1.45"]
-dev = ["pytest>=8", "ruff>=0.6", "matplotlib>=3.8", "plotly>=5.20", "pandas>=2.0", "numpy>=1.26"]
+# Slide decks (sty.Deck): python-pptx writes them, pypdfium2 reads LibreOffice's drawings.
+# LibreOffice itself (soffice) draws them; it is not a Python package.
+deck = ["python-pptx>=1.0", "pypdfium2>=5"]
+dev = [
+  "pytest>=8",
+  "ruff>=0.6",
+  "matplotlib>=3.8",
+  "plotly>=5.20",
+  "pandas>=2.0",
+  "numpy>=1.26",
+  "python-pptx>=1.0",
+  "pypdfium2>=5",
+]
 
 [project.scripts]
 storyteller = "storyteller.cli:main"

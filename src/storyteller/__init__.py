@@ -20,6 +20,7 @@ from .theme import palette  # noqa: E402
 __all__ = [
     "Bar",
     "Box",
+    "Deck",
     "Histogram",
     "Metric",
     "Report",
@@ -33,3 +34,12 @@ __all__ = [
     "palette",
     "theme",
 ]
+
+
+def __getattr__(name: str):
+    # Decks need python-pptx (the "deck" extra), so they load on first use.
+    if name == "Deck":
+        from .deck import Deck
+
+        return Deck
+    raise AttributeError(f"module 'storyteller' has no attribute {name!r}")

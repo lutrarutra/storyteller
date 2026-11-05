@@ -1,6 +1,6 @@
 ---
 name: storyteller
-description: Build the analysis report as one standalone HTML file with storyteller (Python), live, section by section while the analysis runs. Use for every final report, anything the user will share, archive or print (PDF), and whenever the user should judge thresholds or filters themselves (interactive explorer). Not for showing a single quick figure: show the PNG with codeflower-show instead.
+description: Build the analysis report as one standalone HTML file with storyteller (Python), live, section by section while the analysis runs. Use for every final report, anything the user will share, archive or print (PDF), and whenever the user should judge thresholds or filters themselves (interactive explorer). Also builds PowerPoint slide decks (.pptx) the same way, for any request for slides, a presentation or a talk, in the user's template if they have one. Not for showing a single quick figure: show the PNG with codeflower-show instead.
 ---
 
 # Reports with storyteller
@@ -212,6 +212,71 @@ storyteller comments list reports/pbmc        # open ones: id, section, the word
 - A comment whose words you rewrote shows as unanchored to the user: resolve it to say so.
 - If the user sends you a copy they saved with comments in it,
   `storyteller comments import reports/pbmc copy.html` adds them to the report.
+
+## Slide decks
+
+When the user asks for slides or a presentation, build a PowerPoint deck with `sty.Deck`.
+It works like a report (keyed parts, saved live, re-running replaces), and the user
+watches the slides appear: `decks/pbmc.html` shows each slide as LibreOffice draws it.
+The deliverable is `decks/pbmc.pptx`, editable in PowerPoint, Keynote, LibreOffice
+and Google Slides.
+
+```python
+import storyteller as sty
+sty.theme.use()
+
+d = sty.Deck.open("decks/pbmc", title="PBMC cell types")         # once with a title
+with d.slide("intro", "PBMC cell types", subtitle="Eight cell types in 9,871 cells"):
+    d.notes("Open with the question.")                           # speaker notes
+with d.section("qc", "Quality control", description="Are the cells intact?"):  # a header slide, then its slides
+    with d.slide("qc-cut", "Damaged cells form the low tail"):   # the title says the finding
+        d.figure(fig, caption="Genes per cell; dashed: the cut-off.")
+    with d.slide("qc-rules", "Two thresholds remove 8% of cells"):
+        d.text("- **500 genes**: empty or broken droplets\n- **15% mitochondrial**: damaged cells")
+        d.figure(fig2)                                           # two blocks: side by side
+```
+
+```sh
+codeflower-show decks/pbmc.html --message "The slides appear as I make them"
+```
+
+- **Layouts follow the blocks**: none → a title slide (first, or with a subtitle) or a
+  statement; one block (`text`, `figure`, `table`, `metrics`) → full width; two → side by
+  side. Force one with `layout=`: `title`, `section`, `content`, `two`, `statement` (the
+  title alone, large: one sentence to remember), `blank`.
+- **Look at every slide you make.** When a script ends it waits for LibreOffice and prints
+  the PNG of each slide it wrote; open them and fix text that overflows, overlaps or is too
+  small. `storyteller outline decks/pbmc` lists every slide with its key and picture.
+- **Write slides, not a report**: a title that states the finding, at most 5 short bullets,
+  one figure per slide (made at about 9 × 4.5 in for full width, 5 × 4 beside text),
+  tables of at most 12 rows (`d.table` refuses more: show the rows that matter), 2–4
+  `d.metrics`. What you would say goes in `d.notes`.
+- Plotly figures cannot go on slides; draw them with matplotlib.
+- A deck has no summary or provenance: put the take-home message on a `statement` slide.
+- **The user's template**: if they give a PowerPoint template (`.potx` or `.pptx`), open the
+  deck with `template="path/to/brand.potx"`; slides then use its masters, layouts, colours
+  and fonts. Layouts are found by their standard names (Title Slide, Title and Content,
+  Two Content, Section Header, Title Only, Blank); if the template names them otherwise,
+  map them: `layouts={"content": "Text and picture"}`.
+- **Light or dark**: `Deck.open(..., mode="dark")` for dark slides (code flower's template has
+  them; most others do not, and stay light), and `sty.theme.use("dark")` so the figures match.
+  One slide can differ: `with d.slide(..., mode="light")`. Without a template the deck is in
+  code flower's look; `template="codeflower"` returns a deck to it.
+- **The template's fonts must be installed**, or LibreOffice draws the slides in other fonts:
+  your pictures then lie about how the deck looks in PowerPoint (titles wrap or overflow
+  differently). `Deck.open` warns, and `storyteller outline` lists them under "fonts not
+  installed". When it does:
+  1. Look for the font files the user has: next to the template, in its `fonts/` folder, in
+     the inputs. A `fonts/` folder next to the template is used automatically (open the deck
+     again with `template=`).
+  2. Else, if the font is freely licensed (Google Fonts, Adobe's open source fonts, other
+     OFL fonts) and you have network access, download its .ttf/.otf files into
+     `~/.local/share/fonts/` (no root needed; check with `fc-list | grep -i "<family>"`).
+  3. Else (a commercial font, or no network), tell the user which fonts are missing and ask
+     for the files; meanwhile say that the drawn slides use substitutes. Never claim a slide
+     fits when its font was substituted.
+- `d.finalize()` (or `storyteller finalize decks/pbmc`) drops planned sections and draft
+  marks and writes `decks/pbmc.pdf` too. Copy the `.pptx` (and the PDF) to `/data/output/<name>/`.
 
 ## The library itself
 

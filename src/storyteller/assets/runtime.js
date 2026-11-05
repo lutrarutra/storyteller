@@ -225,6 +225,7 @@
   const STORAGE_KEY = 'storyteller-theme';
   const host = global.cfHost && typeof global.cfHost.send === 'function' ? global.cfHost : null;
   if (host) root.classList.add('cf-hosted');
+  if (host && typeof host.download === 'function') root.classList.add('cf-host-download');
 
   function storage(action, value) {
     try {
@@ -894,7 +895,7 @@
         const before = incoming.nextElementSibling && current.get(incoming.nextElementSibling.dataset.cfPart);
         parent.insertBefore(imported, before || null);
       }
-      if (imported.matches('section, .cf-block')) {
+      if (imported.matches('section, .cf-block, [data-cf-flash]')) {
         imported.classList.add('cf-changed');
         setTimeout(() => imported.classList.remove('cf-changed'), 2400);
       }
@@ -946,6 +947,14 @@
       const next = toggleTheme(mode());
       storage('set', next);
       applyTheme(next);
+      return;
+    }
+    if (action && action.dataset.cfAction === 'download') {
+      // In a host the link would take the frame away from the page: the host saves the file.
+      if (host) {
+        event.preventDefault();
+        if (typeof host.download === 'function') host.download(action.dataset.cfFile);
+      }
       return;
     }
     if (action && action.dataset.cfAction === 'print') {

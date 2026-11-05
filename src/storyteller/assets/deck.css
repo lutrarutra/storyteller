@@ -1,0 +1,259 @@
+/* storyteller decks: the viewer's slides, on top of report.css. */
+
+.cf-deck-info {
+  margin: -8px 0 8px;
+}
+
+.cf-deck-bar {
+  margin: 0;
+  color: var(--cf-muted);
+  font-size: 0.82rem;
+}
+
+.cf-deck-bar code {
+  font-size: inherit;
+}
+
+/* The download button is a link (for a page opened on its own) dressed as its neighbours. */
+.cf-report a.cf-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.cf-button-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* A host that cannot save the file (VS Code for now) shows no button for it. */
+.cf-hosted:not(.cf-host-download) [data-cf-action='download'] {
+  display: none;
+}
+
+.cf-deck-error {
+  color: var(--cf-red);
+  font-weight: 600;
+}
+
+.cf-deck-section {
+  padding-top: 24px;
+  margin-top: 24px;
+}
+
+.cf-deck-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.cf-report h2.cf-deck-section-title {
+  flex-basis: auto;
+  color: var(--cf-teal);
+  font: 700 0.8rem/1.4 var(--cf-font);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.cf-report h2.cf-deck-section-title::after {
+  content: none;
+}
+
+.cf-deck-section-source {
+  color: var(--cf-muted);
+  font-size: 0.76rem;
+}
+
+.cf-deck-section-source code {
+  font-size: inherit;
+}
+
+.cf-slides {
+  display: grid;
+  gap: 28px;
+  margin-top: 16px;
+}
+
+[data-cf-slot='main'] > .cf-slide {
+  margin-top: 28px;
+}
+
+.cf-slide {
+  scroll-margin-top: 24px;
+  border-radius: var(--cf-radius);
+  transition: background 0.6s;
+}
+
+.cf-slide-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 2px 8px;
+  min-width: 0;
+}
+
+.cf-slide-number {
+  color: var(--cf-teal);
+  font: 700 0.78rem/1 var(--cf-font);
+  letter-spacing: 0.13em;
+}
+
+.cf-slide-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cf-slide-key {
+  flex: none;
+  color: var(--cf-muted);
+  font: 0.74rem/1 var(--cf-mono);
+}
+
+.cf-slide-frame {
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+  border: var(--cf-border) solid var(--cf-line);
+  border-radius: var(--cf-radius-small);
+  box-shadow: 3px 4px 0 var(--cf-shadow);
+}
+
+.cf-slide-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.cf-slide-stale .cf-slide-image {
+  opacity: 0.55;
+  filter: saturate(0.6);
+  transition: opacity 0.3s;
+}
+
+.cf-slide-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 3px 10px;
+  border: 1.5px solid var(--cf-line);
+  border-radius: 999px;
+  background: var(--cf-yellow-soft);
+  color: var(--cf-ink);
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.cf-slide-wire {
+  position: absolute;
+  inset: 0;
+  padding: 6% 7%;
+  color: #6b5d45;
+  background: repeating-linear-gradient(-45deg, #fffaf0 0 12px, #fbf3e0 12px 24px);
+}
+
+.cf-slide-wire-title {
+  margin: 0 0 0.6em;
+  color: #1d1d1f;
+  font: 600 clamp(1rem, 2.6vw, 1.6rem) / 1.2 var(--cf-font);
+}
+
+.cf-slide-wire-sub {
+  margin: 0 0 0.8em;
+}
+
+.cf-slide-wire ul {
+  margin: 0;
+  padding-left: 1.2em;
+}
+
+.cf-slide-wire-block {
+  list-style: none;
+  margin: 0.5em 0 0 -1.2em;
+  padding: 0.6em 1em;
+  border: 1.5px dashed #e3d8bd;
+  border-radius: 8px;
+  font-family: var(--cf-mono);
+  font-size: 0.8rem;
+}
+
+.cf-slide-notes {
+  margin: 10px 2px 0;
+  color: var(--cf-muted);
+  font-size: 0.9rem;
+}
+
+.cf-slide-notes summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.cf-slide-notes .cf-text {
+  margin-top: 6px;
+  color: var(--cf-ink);
+}
+
+.cf-slide-warning {
+  margin: 8px 2px 0;
+  color: var(--cf-orange);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.cf-slide-warning::before {
+  content: '! ';
+}
+
+.cf-slide .cf-callout {
+  margin: 12px 0 0;
+}
+
+/* Print / PDF: the slides alone, one per page at their own size (render_page sets @page). */
+@media print {
+  .cf-deck .cf-header,
+  .cf-deck .cf-footer,
+  .cf-deck-info,
+  .cf-deck-section-head,
+  .cf-slide-bar,
+  .cf-slide-badge,
+  .cf-slide-notes,
+  .cf-slide-warning,
+  .cf-slide .cf-callout {
+    display: none !important;
+  }
+
+  .cf-deck .cf-sheet,
+  .cf-deck-section,
+  .cf-slides,
+  [data-cf-slot='main'] > .cf-slide {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    gap: 0;
+  }
+
+  .cf-slides {
+    display: block;
+  }
+
+  .cf-slide {
+    break-before: page; /* ignored before the first: no blank page at either end */
+    break-inside: avoid;
+  }
+
+  .cf-slide-frame {
+    width: 100vw;
+    height: 100vh;
+    aspect-ratio: auto !important;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}

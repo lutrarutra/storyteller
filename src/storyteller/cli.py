@@ -7,10 +7,29 @@ import sys
 from pathlib import Path
 
 
+def _is_deck(path: str) -> bool:
+    from pathlib import PurePath
+
+    if PurePath(path).suffix.lower() == ".pptx":
+        return True
+    base = Path(path)
+    if base.suffix.lower() in (".html", ".htm", ".report"):
+        base = base.with_suffix("")
+    return (base.with_name(base.name + ".report") / "deck.json").is_file()
+
+
 def _report(path: str):
+    """The report or deck at `path`: the commands work on both."""
+    if _is_deck(path):
+        from .deck import Deck
+
+        return Deck.open(path)
     from .report import Report
 
-    return Report.open(path)
+    try:
+        return Report.open(path)
+    except FileNotFoundError:
+        raise SystemExit(f"storyteller: no report or deck at {path}") from None
 
 
 def cmd_outline(args: argparse.Namespace) -> int:
@@ -27,7 +46,10 @@ def cmd_build(args: argparse.Namespace) -> int:
 
 def cmd_finalize(args: argparse.Namespace) -> int:
     report = _report(args.report)
-    report.finalize(provenance=not args.no_provenance)
+    if _is_deck(args.report):
+        report.finalize()
+    else:
+        report.finalize(provenance=not args.no_provenance)
     return 0
 
 
@@ -153,14 +175,16 @@ def cmd_demo(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="storyteller", description="Standalone HTML analysis reports.")
+    parser = argparse.ArgumentParser(
+        prog="storyteller", description="Standalone HTML analysis reports and slide decks."
+    )
     commands = parser.add_subparsers(dest="command", required=True)
 
-    sub = commands.add_parser("outline", help="print a report's sections with their keys and status")
-    sub.add_argument("report", help="the report, e.g. reports/pbmc (or reports/pbmc.html)")
+    sub = commands.add_parser("outline", help="print a report's sections or a deck's slides, with keys and status")
+    sub.add_argument("report", help="the report or deck, e.g. reports/pbmc or decks/pbmc")
     sub.set_defaults(run=cmd_outline)
 
-    sub = commands.add_parser("build", help="re-render a report's HTML from its store")
+    sub = commands.add_parser("build", help="re-render a report's HTML (a deck's .pptx and slides) from its store")
     sub.add_argument("report")
     sub.set_defaults(run=cmd_build)
 
