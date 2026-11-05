@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0
+
+- Slide decks: `sty.Deck.open("decks/x", title=...)` builds a PowerPoint file (`decks/x.pptx`)
+  the way reports are built, with sections and slides that scripts fill and re-run. LibreOffice
+  draws each slide as it changes, and `decks/x.html` shows them, updating only the slides that
+  changed. Slides lay themselves out from their text, figures, tables and metrics.
+- Decks use code flower's template, in light or dark (`mode="dark"`), or the user's own `.potx` or
+  `.pptx`, with its fonts from a `fonts/` folder beside it. Fonts that are not installed are
+  reported, and titles too long for their template or tables too wide for their space are named.
+- A deck's page has a button to download the slides, and Print / PDF prints one slide per page.
+- In code flower's page, Print / PDF works for reports too: the page prints a copy for the report.
+- `storyteller outline`, `build`, `finalize`, `remove` and `comments` work on decks as on reports.
+- Install the deck extra with `pip install "storyteller[deck]"`; drawing needs LibreOffice.
+
 ## 0.3.0
 
 - The header names the agent and model that wrote the report ("Claude Code · Opus 5.5"), as code
