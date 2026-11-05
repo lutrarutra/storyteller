@@ -369,3 +369,150 @@ def test_back_to_the_default_template_by_name(tmp_path):
     sty.Deck.open("decks/d", template="codeflower").close()
     assert json.loads(Path("decks/d.report/deck.json").read_text())["meta"]["template"] == "code flower"
     assert not Path("decks/d.report/fonts").exists()
+
+
+def svg_of(picture):
+    """The SVG part a picture carries beside its PNG, or None."""
+    blip = picture._element.find(f".//{{{build.A}}}blip")
+    svg = blip.find(f".//{{{build.ASVG}}}svgBlip")
+    if svg is None:
+        return None
+    return picture.part.related_part(svg.get(f"{{{build.R}}}embed"))
+
+
+def test_a_matplotlib_figure_goes_on_the_slide_as_svg_with_its_text():
+    d = sty.Deck.open("decks/d", title="A deck")
+    with d.slide("fig", "A figure"):
+        fig = small_figure()
+        fig.axes[0].set_xlabel("Genes per cell")
+        d.figure(fig)
+    d.close()
+    picture = next(s for s in read_pptx().slides[0].shapes if s.shape_type == 13)
+    assert picture.image.content_type in ("image/png", "image/jpeg")  # for PowerPoint before 2016
+    part = svg_of(picture)
+    assert part.content_type == "image/svg+xml"
+    assert b">Genes per cell</text>" in part.blob  # text stays text, for Convert to Shape
+    node = json.loads(Path("decks/d.report/deck.json").read_text())["nodes"][0]["children"][0]
+    again = sty.Deck.open("decks/d")
+    with again.slide("fig", "A figure"):
+        fig = small_figure()
+        fig.axes[0].set_xlabel("Genes per cell")
+        again.figure(fig)
+    again.close()
+    rerun = json.loads(Path("decks/d.report/deck.json").read_text())["nodes"][0]["children"][0]
+    assert rerun["vector"] == node["vector"]  # drawn again, the same asset: no redraw
+
+
+def test_a_dense_figure_goes_as_a_picture_only():
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    fig, ax = plt.subplots()
+    ax.scatter(*np.random.default_rng(0).normal(size=(2, 20000)), s=1)
+    d = sty.Deck.open("decks/d", title="A deck")
+    with d.slide("fig", "Dense"):
+        d.figure(fig)
+    d.close()
+    picture = next(s for s in read_pptx().slides[0].shapes if s.shape_type == 13)
+    assert svg_of(picture) is None
+
+
+def test_an_svg_file_keeps_its_svg(tmp_path):
+    pytest.importorskip("shutil").which("rsvg-convert") or pytest.skip("rsvg-convert is not installed")
+    svg = tmp_path / "design.svg"
+    svg.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"><rect width="200" height="100" fill="#4f46e5"/></svg>'
+    )
+    d = sty.Deck.open("decks/d", title="A deck")
+    with d.slide("fig", "Design"):
+        d.figure(str(svg))
+    d.close()
+    picture = next(s for s in read_pptx().slides[0].shapes if s.shape_type == 13)
+    assert b"<rect" in svg_of(picture).blob
+
+
+def test_chart_data_from_frames_dicts_and_long_tables():
+    pd = pytest.importorskip("pandas")
+    from storyteller.deck import charts
+
+    frame = pd.DataFrame({"type": ["B", "T"], "ctrl": [8, 25], "ifn": [7, 24]})
+    chart = charts.prepare(frame, "bar")
+    assert chart["categories"] == ["B", "T"]
+    assert [(s["name"], s["values"]) for s in chart["series"]] == [("ctrl", [8.0, 25.0]), ("ifn", [7.0, 24.0])]
+    assert charts.prepare(frame.set_index("type")["ctrl"], "bar")["categories"] == ["B", "T"]
+    # No text column: the first column is the categories when values follow.
+    line = charts.prepare({"reads": [5, 10], "sat": [0.3, 0.5]}, "line")
+    assert line["categories"] == ["5", "10"] and [s["name"] for s in line["series"]] == ["sat"]
+    long = pd.DataFrame({"type": ["B", "T", "B", "T"], "cond": ["c", "c", "i", "i"], "n": [8, 25, 7, None]})
+    chart = charts.prepare(long, "bar", x="type", y="n", by="cond")
+    assert [(s["name"], s["values"]) for s in chart["series"]] == [("c", [8.0, 25.0]), ("i", [7.0, None])]
+    points = charts.prepare(long.assign(m=[1, 2, 3, 4]), "scatter", x="m", y="n", by="type")
+    assert [(s["name"], s["x"]) for s in points["series"]] == [("B", [1.0, 3.0]), ("T", [2.0, 4.0])]
+    with pytest.raises(KeyError, match="no column 'nope'"):
+        charts.prepare(frame, "bar", y="nope")
+    with pytest.raises(ValueError, match="one series"):
+        charts.prepare(frame, "pie")
+    with pytest.raises(ValueError, match="at most 40 categories"):
+        charts.prepare({"n": list(range(50))}, "bar")
+
+
+def test_charts_are_native_and_editable():
+    from pptx.enum.chart import XL_CHART_TYPE
+
+    d = sty.Deck.open("decks/d", title="A deck")
+    with d.slide("bars", "Bars"):
+        d.chart({"type": ["B", "T"], "ctrl": [8, 25], "ifn": [7, 24]}, "bar", caption="Cells", number_format="#,##0")
+    with d.slide("top", "Top genes"):
+        d.chart({"gene": ["LYZ", "CD74"], "lfc": [3.1, -2.2]}, "barh")
+    with d.slide("pts", "Points"):
+        d.chart({"x": [1, 2, 3], "y": [3, 1, 2], "g": ["a", "a", "b"]}, "scatter", x="x", y="y", by="g")
+    d.close()
+    slides = read_pptx().slides
+    chart = next(s for s in slides[0].shapes if s.has_chart).chart
+    assert chart.chart_type == XL_CHART_TYPE.COLUMN_CLUSTERED
+    assert list(chart.plots[0].categories) == ["B", "T"]
+    assert [s.name for s in chart.series] == ["ctrl", "ifn"]
+    assert chart.part.chart_workbook.xlsx_part is not None  # the data PowerPoint edits
+    assert 'val="accent2"' in chart.part.blob.decode()  # theme colours, so templates restyle it
+    assert "Cells" in texts(slides[0])
+    top = next(s for s in slides[1].shapes if s.has_chart).chart
+    assert list(top.plots[0].categories) == ["CD74", "LYZ"]  # drawn bottom up: LYZ on top
+    assert top.series[0].invert_if_negative is False  # negative bars filled, and drawn the right way
+    points = next(s for s in slides[2].shapes if s.has_chart).chart
+    # LibreOffice leaves out a scatter series shorter than the next: all are padded to one length.
+    assert {len(s.values) for s in points.series} == {2}
+
+
+def test_diagrams_are_grouped_native_shapes():
+    d = sty.Deck.open("decks/d", title="A deck")
+    with d.slide("flow", "Pipeline"):
+        d.flow(["Counts", ("QC", "8% removed"), "Cluster"])
+    with d.slide("cards", "Findings"):
+        d.cards([("Monocytes", "Up 22%"), ("T cells", "No change")])
+        d.callout("Interferon expands monocytes.", title="Take-home")
+    d.close()
+    slides = read_pptx().slides
+    flow = next(s for s in slides[0].shapes if s.shape_type == 6)  # a group
+    boxes = [s for s in flow.shapes if s.has_text_frame and s.text_frame.text]
+    assert [b.text_frame.text for b in boxes] == ["Counts", "QC\n8% removed", "Cluster"]
+    arrows = [s for s in flow.shapes if s.shape_type == 9 or s._element.tag.endswith("cxnSp")]
+    assert len(arrows) == 2
+    glued = arrows[0]._element.xpath(".//a:stCxn/@id | .//a:endCxn/@id")
+    assert [int(i) for i in glued] == [boxes[0].shape_id, boxes[1].shape_id]  # arrows move with the boxes
+    assert boxes[0]._element.find(f"{{{build.P}}}style") is None  # no theme shape style (white text)
+    assert (flow.left, flow.top) == (boxes[0].left, min(b.top for b in boxes))  # the group is as large as its boxes
+    cards = next(s for s in slides[1].shapes if s.shape_type == 6)
+    assert [s.text_frame.text for s in cards.shapes] == ["Monocytes\nUp 22%", "T cells\nNo change"]
+    assert "Take-home\nInterferon expands monocytes." in texts(slides[1])
+
+
+def test_diagram_text_that_cannot_fit_is_flagged():
+    d = sty.Deck.open("decks/d", title="A deck")
+    with d.slide("flow", "Pipeline"):
+        d.flow([("Step", "word " * 120)] * 6)
+    d.close()
+    built = json.loads(Path("decks/d.report/build.json").read_text())
+    assert any("too much text" in w for w in built["slides"][0]["warnings"])
+    again = sty.Deck.open("decks/d")
+    with again.slide("x", "X"), pytest.raises(ValueError, match="1 to 6 boxes"):
+        again.flow(["a"] * 7)

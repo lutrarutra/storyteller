@@ -163,7 +163,7 @@ class DiskStore:
         return removed
 
 
-ASSET_FIELDS = ("asset", "static", "spec", "data")
+ASSET_FIELDS = ("asset", "static", "spec", "data", "vector")
 
 
 def referenced_assets(nodes: list[dict[str, Any]]) -> Iterator[str]:

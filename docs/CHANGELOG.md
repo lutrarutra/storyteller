@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Slides the user can edit in PowerPoint: `d.chart(...)` makes native charts (bar, horizontal
+  bar, line, area, pie, scatter) whose data PowerPoint edits; `d.flow(...)`, `d.cards(...)` and
+  `d.callout(...)` draw processes, grids of findings and take-home messages as native shapes.
+  All use the template's theme colours, so a user's template and dark slides restyle them.
+- Matplotlib figures and SVG files go on slides as SVG (with a picture for PowerPoint before
+  2016), which PowerPoint can Convert to Shape, their text included. Figures with thousands of
+  points stay pictures; drawn `rasterized=True`, only their points are.
 - In a narrow pane (beside the chat), a report's or deck's buttons go below its title, which no
   longer breaks mid-word.
 

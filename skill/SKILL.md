@@ -241,8 +241,8 @@ codeflower-show decks/pbmc.html --message "The slides appear as I make them"
 ```
 
 - **Layouts follow the blocks**: none → a title slide (first, or with a subtitle) or a
-  statement; one block (`text`, `figure`, `table`, `metrics`) → full width; two → side by
-  side. Force one with `layout=`: `title`, `section`, `content`, `two`, `statement` (the
+  statement; one block (`text`, `figure`, `table`, `chart`, `metrics`, `flow`, `cards`,
+  `callout`) → full width; two → side by side. Force one with `layout=`: `title`, `section`, `content`, `two`, `statement` (the
   title alone, large: one sentence to remember), `blank`.
 - **Look at every slide you make.** When a script ends it waits for LibreOffice and prints
   the PNG of each slide it wrote; open them and fix text that overflows, overlaps or is too
@@ -251,7 +251,23 @@ codeflower-show decks/pbmc.html --message "The slides appear as I make them"
   one figure per slide (made at about 9 × 4.5 in for full width, 5 × 4 beside text),
   tables of at most 12 rows (`d.table` refuses more: show the rows that matter), 2–4
   `d.metrics`. What you would say goes in `d.notes`.
-- Plotly figures cannot go on slides; draw them with matplotlib.
+- **Make it editable**: the user will change the deck in PowerPoint, so prefer blocks that
+  stay native there over pictures:
+  - `d.chart(df, "bar", x="type", y=["ctrl", "ifn"])`: a real PowerPoint chart (the user can
+    Edit Data), in the template's colours. Kinds `bar`, `barh`, `line`, `area`, `pie`,
+    `scatter`; `by="condition"` splits long data into series; `labels=True`,
+    `number_format="0.0%"`, `x_label=`, `y_label=`, `stacked=True`. Use it for simple plots
+    (up to 6 series, 40 categories, 2000 points); anything else (UMAPs, violins, heatmaps,
+    facets) is a figure.
+  - `d.flow(["Raw counts", ("QC", "8% removed"), "Cluster"])`: a process as boxes and arrows
+    (2–6 steps, a few words each; `direction="down"`). `d.cards([("Monocytes", "Up 22%"),
+    ...])`: a grid of headed boxes (2–8). `d.callout("...", title="Take-home")`: the one
+    message, in a tinted box. All native shapes, in the theme's colours.
+  - `d.figure(fig)` puts matplotlib figures (and SVG files) on the slide as SVG, which
+    PowerPoint can Convert to Shape, axis labels as text. For thousands of points, draw them
+    with `rasterized=True` (`ax.scatter(..., rasterized=True)`): the points become a picture
+    and the rest stays editable; otherwise the whole figure is a picture.
+- Plotly figures cannot go on slides; draw them with matplotlib or use `d.chart`.
 - A deck has no summary or provenance: put the take-home message on a `statement` slide.
 - **The user's template**: if they give a PowerPoint template (`.potx` or `.pptx`), open the
   deck with `template="path/to/brand.potx"`; slides then use its masters, layouts, colours

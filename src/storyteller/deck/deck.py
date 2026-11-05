@@ -32,10 +32,11 @@ from typing import Any
 from .. import adapters, tables
 from .. import comments as reader_comments
 from ..document import LiveDocument, close_first_at_exit, now, running_agent, slugify
+from ..images import encode_svg
 from ..render import _clock
 from ..report import Metric, metric_entries
 from ..store import DiskStore, atomic_write
-from . import build, office, view
+from . import build, charts, office, view
 from . import fonts as deck_fonts
 from . import template as templates
 
@@ -50,6 +51,10 @@ WIDTH_PX = 1600
 WEBP_QUALITY = 82
 TABLE_MAX_ROWS = 12
 FIGURE_MAX_PX = 2400
+# A matplotlib figure goes on a slide as SVG too (editable in PowerPoint) when its SVG is at most
+# this large; denser ones (thousands of points) only as a picture, unless drawn rasterized=True.
+VECTOR_MAX_BYTES = 600_000
+DIAGRAM_MAX_ITEMS = {"flow": 6, "cards": 8}
 
 
 def paths(path: str | Path) -> tuple[Path, Path, Path]:
@@ -182,6 +187,41 @@ def _webp(image) -> bytes:
     buffer = io.BytesIO()
     image.convert("RGB").save(buffer, "WEBP", quality=WEBP_QUALITY, method=4)
     return buffer.getvalue()
+
+
+def _figure_svg(figure: Any):
+    """The matplotlib figure as SVG with its text as text (so it stays editable), or None when
+    it is too large to edit as shapes. Ids are fixed, so drawing it again gives the same asset."""
+    import io
+
+    import matplotlib
+
+    buffer = io.BytesIO()
+    with matplotlib.rc_context({"svg.fonttype": "none", "svg.hashsalt": "storyteller"}):
+        figure.savefig(buffer, format="svg", bbox_inches="tight", metadata={"Date": None})
+    if buffer.tell() > VECTOR_MAX_BYTES:
+        return None
+    return encode_svg(buffer.getvalue())
+
+
+def _diagram_items(items: Sequence[Any], kind: str) -> list[dict[str, str]]:
+    """Diagram boxes as {title, text}: a string is the box's words, a pair its heading and text."""
+    out = []
+    for item in items:
+        if isinstance(item, str):
+            out.append({"text": item})
+        elif isinstance(item, Mapping):
+            unknown = set(item) - {"title", "text"}
+            if unknown:
+                raise ValueError(f"a {kind} box has a title and a text, not {', '.join(sorted(unknown))}")
+            out.append({name: str(value) for name, value in item.items() if value})
+        else:
+            title, text = item
+            out.append({"title": str(title), "text": str(text)} if text else {"title": str(title)})
+    most = DIAGRAM_MAX_ITEMS[kind]
+    if not 1 <= len(out) <= most:
+        raise ValueError(f"deck.{kind}() takes 1 to {most} boxes, not {len(out)}: split it over slides")
+    return out
 
 
 # -- the deck -------------------------------------------------------------------------------------------
@@ -499,18 +539,26 @@ class Deck(LiveDocument):
         key: str | None = None,
         close: bool = True,
     ) -> str | None:
-        """A picture: a matplotlib figure or axes, seaborn grid, PIL image, array, or an image file."""
+        """A picture: a matplotlib figure or axes, seaborn grid, PIL image, array, or an image file.
+
+        Matplotlib figures and SVG files go on the slide as SVG (with a PNG for old PowerPoint),
+        which PowerPoint can Convert to Shape for the user to edit, text included. A figure with
+        thousands of points goes as a picture only, unless those are drawn ``rasterized=True``."""
         self._open_slide("figure")
         if adapters.is_plotly(figure):
             raise TypeError(
                 "plotly figures cannot go on a slide: draw it with matplotlib, or save it with fig.write_image()"
             )
         mpl = adapters.matplotlib_figure(figure)
+        vector = None
         if mpl is not None:
+            vector = _figure_svg(mpl)
             asset = adapters.from_matplotlib(mpl, svg_max_bytes=0, max_px=FIGURE_MAX_PX, lossless=True, close=close)
         else:
             asset = adapters.to_asset(figure, max_px=FIGURE_MAX_PX)
         node: dict[str, Any] = {"type": "figure", "asset": self._put(asset)}
+        if vector is not None:
+            node["vector"] = self._put(vector)
         if caption:
             node["caption"] = caption
         if alt:
@@ -556,6 +604,86 @@ class Deck(LiveDocument):
         node: dict[str, Any] = {"type": "table", "columns": columns, "rows": cells, "numeric": numeric}
         if caption:
             node["caption"] = caption
+        return self._add(node, key)
+
+    def chart(
+        self,
+        data: Any,
+        kind: str = "bar",
+        *,
+        x: str | None = None,
+        y: str | Sequence[str] | None = None,
+        by: str | None = None,
+        caption: str | None = None,
+        stacked: bool = False,
+        labels: bool = False,
+        x_label: str | None = None,
+        y_label: str | None = None,
+        number_format: str | None = None,
+        key: str | None = None,
+    ) -> str | None:
+        """A native PowerPoint chart, whose data the user can edit in PowerPoint, in the theme's
+        colours. `kind` is ``bar``, ``barh``, ``line``, ``area``, ``pie`` or ``scatter``.
+
+        `data` is a DataFrame, Series, dict of columns or list of rows. `x` is the column of
+        categories (default: the index, else the first text column; for scatter, the first
+        numeric column), `y` the column(s) of values, one series each (default: the numeric
+        ones). `by` splits one `y` column into a series per value of `by` (long data).
+        `labels` writes the values on the bars or points; `number_format` is Excel's
+        (``"0.0%"``, ``"#,##0"``). Up to 6 series and 40 categories (2000 scatter points):
+        more is a figure."""
+        self._open_slide("chart")
+        node: dict[str, Any] = {"type": "chart", "kind": kind, **charts.prepare(data, kind, x=x, y=y, by=by)}
+        options = {
+            "caption": caption,
+            "stacked": stacked,
+            "labels": labels,
+            "x_label": x_label,
+            "y_label": y_label,
+            "number_format": number_format,
+        }
+        node.update({name: value for name, value in options.items() if value})
+        return self._add(node, key)
+
+    def flow(
+        self,
+        steps: Sequence[str | tuple[str, str] | Mapping[str, str]],
+        *,
+        direction: str | None = None,
+        key: str | None = None,
+    ) -> str | None:
+        """A process as native shapes: boxes joined by arrows, editable in PowerPoint. Each step
+        is a few words, or ``(heading, text)``. `direction` is ``"right"`` or ``"down"``
+        (default: right, or down in a tall region). Two to six steps."""
+        self._open_slide("flow")
+        if direction not in (None, "right", "down"):
+            raise ValueError(f"direction is 'right' or 'down', not {direction!r}")
+        node: dict[str, Any] = {"type": "flow", "steps": _diagram_items(steps, "flow")}
+        if direction:
+            node["direction"] = direction
+        return self._add(node, key)
+
+    def cards(
+        self,
+        items: Sequence[str | tuple[str, str] | Mapping[str, str]],
+        *,
+        columns: int | None = None,
+        key: str | None = None,
+    ) -> str | None:
+        """Boxes in a grid, each ``(heading, text)`` or a few words: findings, options, a
+        summary. Native shapes, editable in PowerPoint. Two to eight."""
+        self._open_slide("cards")
+        node: dict[str, Any] = {"type": "cards", "items": _diagram_items(items, "cards")}
+        if columns:
+            node["columns"] = int(columns)
+        return self._add(node, key)
+
+    def callout(self, text: str, *, title: str | None = None, key: str | None = None) -> str | None:
+        """The slide's take-home message in a tinted box (Markdown, one or two sentences)."""
+        self._open_slide("callout")
+        node: dict[str, Any] = {"type": "callout", "text": text}
+        if title:
+            node["title"] = title
         return self._add(node, key)
 
     def metrics(

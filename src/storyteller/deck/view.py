@@ -38,7 +38,7 @@ def _wireframe(entry: dict[str, Any], node: dict[str, Any]) -> str:
     for child in node.get("children", []) if entry["kind"] == "slide" else []:
         if child["type"] == "text":
             lines.extend(f"<li>{escape(build.plain(p))}</li>" for p in child["markdown"].split("\n") if p.strip())
-        elif child["type"] in ("figure", "table", "metrics"):
+        elif child["type"] in build.CONTENT:
             lines.append(f'<li class="cf-slide-wire-block">{child["type"]}</li>')
     subtitle = node.get("subtitle") or node.get("description") or ""
     return (

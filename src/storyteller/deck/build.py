@@ -1,9 +1,11 @@
 """Builds a deck's .pptx from its document, with python-pptx.
 
 A slide's blocks fill the placeholders of its template layout: the title, then one
-content region per block (text, a figure, a table, metrics). Empty placeholders are
-removed, so nothing reads "Click to add text" in PowerPoint. Colours are the theme's
-own (accent 1, text 2), so a user's template restyles everything.
+content region per block (text, a figure, a table, a chart, metrics, a diagram). Empty
+placeholders are removed, so nothing reads "Click to add text" in PowerPoint. Everything
+is native and editable there: text, tables, charts (their data too), diagrams of shapes and
+connectors, and SVG figures (Convert to Shape). Colours are the theme's own (accent 1,
+text 1), so a user's template restyles everything.
 
 `build` also lists the slides in order, each with the part of the viewer it belongs
 to and a hash of what it shows, which the renderer and the viewer go by.
@@ -26,15 +28,28 @@ from PIL import Image
 
 from ..images import Asset
 from ..render import node_hash
+from . import charts, colors
 from . import fonts as deck_fonts
 from . import template as templates
 
-CONTENT = ("text", "figure", "table", "metrics")
+CONTENT = ("text", "figure", "table", "chart", "metrics", "flow", "cards", "callout")
 STATUS_RGB = {"good": "3A9D4B", "warning": "D9822B", "critical": "D6453A"}
 ERROR_RGB = "D6453A"
 MONO = "Courier New"
 MIN_TITLE_SCALE = 0.65  # a one-line title shrinks this far before it wraps
 TABLE_SIZES = (16, 14, 12, 11, 10)
+# Heading and body sizes (pt) a diagram's boxes try, largest first, until their text fits.
+BOX_SIZES = ((24, 18), (22, 17), (20, 16), (18, 15), (17, 14), (16, 13), (14, 12), (13, 11))
+CALLOUT_SIZES = (28, 26, 24, 22, 20, 18, 16)
+BOX_INSET = round(0.14 * 914400)  # left and right
+BOX_INSET_V = round(0.08 * 914400)  # top and bottom
+DIAGRAM_GAP = round(0.5 * 914400)  # between boxes side by side, for the arrow
+DIAGRAM_GAP_V = round(0.3 * 914400)  # between boxes above each other
+CARD_MIN_W = round(2.2 * 914400)
+# PowerPoint's extension for an SVG beside a picture's PNG (Office 2016 and later; LibreOffice too).
+SVG_EXT = "{96DAC541-7B7A-43D3-8B79-37D633B846F1}"
+ASVG = "http://schemas.microsoft.com/office/drawing/2016/SVG/main"
+R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 P = "http://schemas.openxmlformats.org/presentationml/2006/main"
 
@@ -346,8 +361,16 @@ class _Slide:
             self._figure(block, box)
         elif kind == "table":
             self._table(block, box)
+        elif kind == "chart":
+            self._chart(block, box)
         elif kind == "metrics":
             self._metrics(block, box)
+        elif kind == "flow":
+            self._flow(block, box)
+        elif kind == "cards":
+            self._cards(block, box)
+        elif kind == "callout":
+            self._callout(block, box)
 
     def _remove(self, placeholder: Any) -> None:
         if placeholder is not None:
@@ -475,9 +498,11 @@ class _Slide:
     # -- figures, tables, metrics --
 
     def _figure(self, block: dict[str, Any], box: templates.Box) -> None:
-        from pptx.util import Pt
 
         asset = self.assets(block["asset"])
+        vector = self.assets(block["vector"]) if block.get("vector") else None
+        if vector is None and asset.mime == "image/svg+xml":
+            vector = asset
         data, width, height = _picture(asset)
         caption = block.get("caption")
         caption_h = round(0.45 * templates.EMU_PER_INCH) if caption else 0
@@ -487,18 +512,33 @@ class _Slide:
         x = box.x + (box.w - w) // 2
         y = box.y + (room_h - h) // 2
         picture = self.slide.shapes.add_picture(io.BytesIO(data), x, y, w, h)
+        if vector is not None:
+            _add_svg(self.slide, picture, vector.data)
         if block.get("alt"):
             picture._element.nvPicPr.cNvPr.set("descr", block["alt"])
         if caption:
-            shape = self.slide.shapes.add_textbox(box.x, y + h + round(0.06 * templates.EMU_PER_INCH), box.w, caption_h)
-            frame = shape.text_frame
-            frame.word_wrap = True
-            self._paragraphs(frame, [Paragraph(_runs_of(caption))])
-            for paragraph in frame.paragraphs:
-                paragraph.alignment = 2  # centre
-                for run in paragraph.runs:
-                    run.font.size = Pt(12)
-                    _muted(run.font)
+            self._caption(caption, box.x, y + h + round(0.06 * templates.EMU_PER_INCH), box.w, caption_h)
+
+    def _caption(self, caption: str, x: int, y: int, w: int, h: int) -> None:
+        from pptx.util import Pt
+
+        shape = self.slide.shapes.add_textbox(x, y, w, h)
+        frame = shape.text_frame
+        frame.word_wrap = True
+        self._paragraphs(frame, [Paragraph(_runs_of(caption))])
+        for paragraph in frame.paragraphs:
+            paragraph.alignment = 2  # centre
+            for run in paragraph.runs:
+                run.font.size = Pt(12)
+                _muted(run.font)
+
+    def _chart(self, block: dict[str, Any], box: templates.Box) -> None:
+        caption = block.get("caption")
+        caption_h = round(0.45 * templates.EMU_PER_INCH) if caption else 0
+        height = box.h - caption_h
+        charts.add(self.slide, block, box.x, box.y, box.w, height)
+        if caption:
+            self._caption(caption, box.x, box.y + height + round(0.06 * templates.EMU_PER_INCH), box.w, caption_h)
 
     def _table(self, block: dict[str, Any], box: templates.Box) -> None:
         from pptx.enum.text import PP_ALIGN
@@ -577,6 +617,139 @@ class _Slide:
                 note.text = item["note"]
                 note.font.size = Pt(15)
                 _muted(note.font)
+
+    # -- diagrams: native shapes the user can edit, moved together as one group --
+
+    def _flow(self, block: dict[str, Any], box: templates.Box) -> None:
+        """Steps in boxes joined by arrows, left to right (or downwards in a tall region). The
+        arrows are connectors glued to the boxes: moving a box in PowerPoint keeps them joined."""
+        from pptx.enum.shapes import MSO_CONNECTOR, MSO_SHAPE
+        from pptx.util import Pt
+
+        steps = block["steps"]
+        count = len(steps)
+        across = (block.get("direction") or ("right" if box.w >= 1.2 * box.h else "down")) == "right"
+        gap = DIAGRAM_GAP if across else DIAGRAM_GAP_V
+        if across:
+            w = (box.w - gap * (count - 1)) // count
+            sizes, needed = self._box_sizes(steps, w, box.h)
+            h = min(box.h, max(needed, round(1.1 * templates.EMU_PER_INCH)))
+            spots = [(box.x + i * (w + gap), box.y + (box.h - h) // 2) for i in range(count)]
+        else:
+            h = (box.h - gap * (count - 1)) // count
+            w = min(box.w, round(7 * templates.EMU_PER_INCH))
+            sizes, _ = self._box_sizes(steps, w, h)
+            spots = [(box.x + (box.w - w) // 2, box.y + i * (h + gap)) for i in range(count)]
+        group = self.slide.shapes.add_group_shape()
+        group.name = "Flow"
+        shapes = []
+        for step, (x, y) in zip(steps, spots, strict=True):
+            shape = _plain_shape(group.shapes, MSO_SHAPE.ROUNDED_RECTANGLE, x, y, w, h)
+            _corner(shape, 0.12)
+            colors.fill(shape.fill, "tx1", alpha=0.05)
+            colors.line(shape.line, "accent1", width=Pt(1.75))
+            self._box_text(shape, step, sizes, centred=True)
+            shapes.append(shape)
+        for before, after in zip(shapes, shapes[1:], strict=False):
+            arrow = group.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, 0, 0, 0, 0)
+            _drop_style(arrow)
+            arrow.begin_connect(before, 3 if across else 2)
+            arrow.end_connect(after, 1 if across else 0)
+            colors.line(arrow.line, "tx1", alpha=0.6, width=Pt(2))
+            _arrowhead(arrow)
+        group.shapes._recalculate_extents()  # the arrows started at the slide's corner, before they were glued
+
+    def _cards(self, block: dict[str, Any], box: templates.Box) -> None:
+        """A grid of boxes, each a heading and a line or two: findings, options, a summary."""
+        from pptx.enum.shapes import MSO_SHAPE
+
+        items = block["items"]
+        count = len(items)
+        gap = round(0.3 * templates.EMU_PER_INCH)
+        wanted = block.get("columns") or (count if count <= 4 else 3 if count in (5, 6, 9) else 4)
+        fit = max(1, (box.w + gap) // (CARD_MIN_W + gap))
+        columns = max(1, min(wanted, fit, count))
+        rows = math.ceil(count / columns)
+        w = (box.w - gap * (columns - 1)) // columns
+        cell_h = (box.h - gap * (rows - 1)) // rows
+        sizes, needed = self._box_sizes(items, w, cell_h)
+        h = min(cell_h, max(needed, round(1.4 * templates.EMU_PER_INCH)))
+        top = box.y + (box.h - (h * rows + gap * (rows - 1))) // 2
+        group = self.slide.shapes.add_group_shape()
+        group.name = "Cards"
+        for index, item in enumerate(items):
+            r, c = divmod(index, columns)
+            shape = _plain_shape(
+                group.shapes, MSO_SHAPE.ROUNDED_RECTANGLE, box.x + c * (w + gap), top + r * (h + gap), w, h
+            )
+            _corner(shape, 0.06)
+            colors.fill(shape.fill, "tx1", alpha=0.06)
+            shape.line.fill.background()
+            self._box_text(shape, item, sizes, centred=False, middle=False)
+
+    def _callout(self, block: dict[str, Any], box: templates.Box) -> None:
+        """One sentence that matters, in a tinted box: the take-home message."""
+        from pptx.enum.shapes import MSO_SHAPE
+        from pptx.util import Pt
+
+        item = {"title": block.get("title"), "text": block["text"]}
+        inner = box.w - 2 * BOX_INSET - round(0.2 * templates.EMU_PER_INCH)
+        size = next(
+            (s for s in CALLOUT_SIZES if _text_height(item, (round(s * 1.1), s), inner) <= box.h - 2 * BOX_INSET_V),
+            None,
+        )
+        if size is None:
+            size = CALLOUT_SIZES[-1]
+            self.warnings.append("the callout has too much text for its space: say it in one sentence")
+        needed = (
+            _text_height(item, (round(size * 1.1), size), inner) + 2 * BOX_INSET_V + round(0.3 * templates.EMU_PER_INCH)
+        )
+        h = min(box.h, max(needed, round(1.2 * templates.EMU_PER_INCH)))
+        shape = _plain_shape(self.slide.shapes, MSO_SHAPE.ROUNDED_RECTANGLE, box.x, box.y + (box.h - h) // 2, box.w, h)
+        shape.name = "Callout"
+        _corner(shape, 0.1)
+        colors.fill(shape.fill, "accent1", alpha=0.12)
+        colors.line(shape.line, "accent1", width=Pt(1.5))
+        self._box_text(shape, item, (round(size * 1.1), size), centred=False, middle=True)
+
+    def _box_sizes(self, items: list[dict[str, Any]], w: int, h: int) -> tuple[tuple[int, int], int]:
+        """The largest heading and body sizes at which every box's text fits a w × h box, and
+        the height (EMU) the fullest box needs at those sizes."""
+        inner_w = w - 2 * BOX_INSET
+        for sizes in BOX_SIZES:
+            heights = [_text_height(item, sizes, inner_w) for item in items]
+            if max(heights) + 2 * BOX_INSET_V <= h:
+                return sizes, max(heights) + 2 * BOX_INSET_V + round(0.2 * templates.EMU_PER_INCH)
+        self.warnings.append("the diagram's boxes have too much text: a few words each, details in the notes")
+        return BOX_SIZES[-1], h
+
+    def _box_text(
+        self, shape, item: dict[str, Any], sizes: tuple[int, int], *, centred: bool, middle: bool = True
+    ) -> None:
+        """A box's heading (bold, in the first accent) and text (Markdown)."""
+        from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
+        from pptx.util import Pt
+
+        frame = shape.text_frame
+        frame.word_wrap = True
+        frame.margin_left = frame.margin_right = BOX_INSET
+        frame.margin_top = frame.margin_bottom = BOX_INSET_V
+        frame.vertical_anchor = MSO_ANCHOR.MIDDLE if middle else MSO_ANCHOR.TOP
+        items = [Paragraph(_runs_of(item["title"]))] if item.get("title") else []
+        items += paragraphs(item["text"]) if item.get("text") else []
+        self._paragraphs(frame, items)
+        for index, paragraph in enumerate(frame.paragraphs):
+            heading = index == 0 and bool(item.get("title"))
+            paragraph.alignment = PP_ALIGN.CENTER if centred else PP_ALIGN.LEFT
+            if heading and item.get("text"):
+                paragraph.space_after = Pt(4)
+            for run in paragraph.runs:
+                run.font.size = Pt(sizes[0] if heading else sizes[1])
+                if heading:
+                    run.font.bold = True
+                    colors.font(run.font, "accent1")
+                else:
+                    colors.font(run.font, "tx1")
 
     # -- marks and notes --
 
@@ -698,6 +871,72 @@ def _theme_color(font, name: str) -> None:
     from pptx.enum.dml import MSO_THEME_COLOR
 
     font.color.theme_color = getattr(MSO_THEME_COLOR, name)
+
+
+def _plain_shape(shapes, kind, x: int, y: int, w: int, h: int):
+    """An autoshape without the theme's shape style, whose white text and accent fill would
+    otherwise show wherever storyteller sets no colour of its own."""
+    shape = shapes.add_shape(kind, x, y, w, h)
+    _drop_style(shape)
+    return shape
+
+
+def _drop_style(shape) -> None:
+    style = shape._element.find(f"{{{P}}}style")
+    if style is not None:
+        shape._element.remove(style)
+
+
+def _corner(shape, ratio: float) -> None:
+    """A rounded rectangle's corner radius, as a share of its shorter side (0.5 is a pill)."""
+    shape.adjustments[0] = ratio
+
+
+def _arrowhead(connector) -> None:
+    from lxml import etree
+
+    line = connector.line._get_or_add_ln()
+    for old in line.findall(f"{{{A}}}tailEnd"):
+        line.remove(old)
+    etree.SubElement(line, f"{{{A}}}tailEnd", type="triangle", w="med", len="med")
+
+
+def _text_height(item: dict[str, Any], sizes: tuple[int, int], width: int) -> int:
+    """About how tall (EMU) a box's heading and text set at `sizes` are when wrapped to `width`;
+    endless when a word is wider than the box, so it would break mid-word."""
+    width_pt = width / 12700
+    total = 0.0
+    parts = [(plain(item["title"]), sizes[0], True)] if item.get("title") else []
+    parts += [(plain(line), sizes[1], False) for line in (item.get("text") or "").split("\n") if line.strip()]
+    for text, size, bold in parts:
+        per_char = size * (0.58 if bold else 0.53)
+        if any(len(word) * per_char > width_pt for word in text.split()):
+            return 10**9
+        lines, used = 1, 0.0
+        for word in text.split():
+            needed = len(word) * per_char + (per_char if used else 0)
+            if used and used + needed > width_pt:
+                lines, used = lines + 1, len(word) * per_char
+            else:
+                used += needed
+        total += lines * size * 1.2 + (4 if bold else 0)
+    return round(total * 12700)
+
+
+def _add_svg(slide, picture, svg: bytes) -> None:
+    """Gives `picture` its SVG: PowerPoint shows the SVG (and can Convert to Shape it to edit
+    it), older versions the PNG it already has."""
+    from lxml import etree
+    from pptx.opc.constants import RELATIONSHIP_TYPE as RT
+    from pptx.opc.package import Part
+
+    package = slide.part.package
+    part = Part(package.next_image_partname("svg"), "image/svg+xml", package, svg)
+    rid = slide.part.relate_to(part, RT.IMAGE)
+    blip = picture._element.find(f".//{{{A}}}blip")
+    extensions = etree.SubElement(blip, f"{{{A}}}extLst")
+    extension = etree.SubElement(extensions, f"{{{A}}}ext", uri=SVG_EXT)
+    etree.SubElement(extension, f"{{{ASVG}}}svgBlip", {f"{{{R}}}embed": rid})
 
 
 def _picture(asset: Asset) -> tuple[bytes, int, int]:
