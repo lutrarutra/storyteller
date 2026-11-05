@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
 
 - Slides the user can edit in PowerPoint: `d.chart(...)` makes native charts (bar, horizontal
   bar, line, area, pie, scatter) whose data PowerPoint edits; `d.flow(...)`, `d.cards(...)` and
