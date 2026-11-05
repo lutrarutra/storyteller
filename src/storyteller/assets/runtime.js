@@ -949,7 +949,9 @@
       return;
     }
     if (action && action.dataset.cfAction === 'print') {
-      global.print();
+      // A host whose frame may not open dialogs (code flower's page) prints a copy itself.
+      if (host && typeof host.print === 'function') host.print();
+      else global.print();
       return;
     }
     const header = event.target.closest('table[data-cf-sortable] thead th');
