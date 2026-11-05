@@ -119,6 +119,14 @@ body {
     padding: 24px 18px;
     border-radius: var(--cf-radius);
   }
+
+  /* A narrow page (a pane beside the chat): the buttons go below, leaving the title its width. */
+  .cf-header .cf-toolbar {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
 }
 
 /* -- header */

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- In a narrow pane (beside the chat), a report's or deck's buttons go below its title, which no
+  longer breaks mid-word.
+
 ## 0.4.0
 
 - Slide decks: `sty.Deck.open("decks/x", title=...)` builds a PowerPoint file (`decks/x.pptx`)
