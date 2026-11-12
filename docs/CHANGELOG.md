@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0
+
+- In code flower's page, a figure the user clicks opens over the whole window, full size, to
+  comment on its parts; elsewhere it opens in the report's own lightbox as before.
+- A report's buttons go below its title whenever its header is narrow, not only in a narrow
+  window, and table cells keep a minimum width in a narrow pane, the table scrolling sideways.
+
 ## 0.5.0
 
 - Slides the user can edit in PowerPoint: `d.chart(...)` makes native charts (bar, horizontal
