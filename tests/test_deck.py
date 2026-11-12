@@ -275,7 +275,10 @@ def test_template_fonts_are_found_in_the_decks_fonts_folder(tmp_path):
 
     from storyteller.deck import fonts
 
-    source = Path(ImageFont.truetype("DejaVuSans.ttf", 12).path) if hasattr(ImageFont, "truetype") else None
+    try:
+        source = Path(ImageFont.truetype("DejaVuSans.ttf", 12).path)
+    except OSError:  # not installed, e.g. on macOS
+        source = None
     if source is None or not source.is_file():
         pytest.skip("no DejaVu Sans to stand in for a template font")
     folder = tmp_path / "fonts"
