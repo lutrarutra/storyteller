@@ -119,14 +119,6 @@ body {
     padding: 24px 18px;
     border-radius: var(--cf-radius);
   }
-
-  /* A narrow page (a pane beside the chat): the buttons go below, leaving the title its width. */
-  .cf-header .cf-toolbar {
-    grid-column: 1 / -1;
-    grid-row: auto;
-    flex-wrap: wrap;
-    margin-top: 12px;
-  }
 }
 
 /* -- header */
@@ -139,6 +131,19 @@ body {
   padding-bottom: 28px;
   margin-bottom: 8px;
   border-bottom: var(--cf-border) solid var(--cf-line);
+  container-type: inline-size;
+}
+
+/* A narrow header (a pane beside the chat): the buttons go below, leaving the title its width.
+   Measured on the header, not the viewport: at a mid width the sheet's padding, the logo and the
+   buttons together left the title a few characters a line. */
+@container (max-width: 680px) {
+  .cf-header .cf-toolbar {
+    grid-column: 2 / -1;
+    grid-row: auto;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
 }
 
 .cf-logo {
@@ -734,6 +739,16 @@ body {
 .cf-table .cf-index {
   color: var(--cf-muted);
   font-weight: 600;
+}
+
+/* Headers don't wrap, so in a narrow pane the auto layout would squeeze the body cells down to one
+   character a line. Give them a floor instead; the wrapper scrolls sideways past it. */
+.cf-table tbody td {
+  min-width: 6em;
+}
+
+.cf-table tbody th.cf-index {
+  min-width: 12em;
 }
 
 .cf-table td.cf-flag {
@@ -1412,6 +1427,11 @@ body {
 
   .cf-table thead th {
     position: static;
+  }
+
+  .cf-table tbody td,
+  .cf-table tbody th.cf-index {
+    min-width: 0;
   }
 
   .cf-tab-labels {
