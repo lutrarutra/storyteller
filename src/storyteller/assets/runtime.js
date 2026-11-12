@@ -759,6 +759,22 @@
     dialog.showModal();
   }
 
+  /** Hands a clicked figure to the host: its image, its number as in "Figure 3", its caption and place. False if it cannot. */
+  function showOnHost(image) {
+    const figure = image.closest('figure.cf-figure');
+    const index = [...root.querySelectorAll('figure.cf-figure')].indexOf(figure) + 1;
+    if (!figure || index < 1 || !/^data:image\//.test(image.getAttribute('src') || '')) return false;
+    const caption = (figure.querySelector('figcaption')?.textContent || image.alt || '').replace(/\s+/g, ' ').trim();
+    host.figure({
+      src: image.getAttribute('src'),
+      index,
+      caption,
+      part: figure.closest('[data-cf-part]')?.getAttribute('data-cf-part') || '',
+      anchor: figure.closest('[id]')?.id || ''
+    });
+    return true;
+  }
+
   // -- whole page: init, theme, print, toc ----------------------------------------------------
 
   function init(scope) {
@@ -975,7 +991,11 @@
       return;
     }
     const image = event.target.closest('.cf-figure img');
-    if (image && typeof HTMLDialogElement !== 'undefined') openLightbox(image);
+    if (!image) return;
+    // A host that shows figures over its whole window (the code flower app) gets the figure;
+    // elsewhere, as in a downloaded report, it opens in the page's own lightbox.
+    if (host && typeof host.figure === 'function' && showOnHost(image)) return;
+    if (typeof HTMLDialogElement !== 'undefined') openLightbox(image);
   });
   global.addEventListener('beforeprint', beforePrint);
   global.addEventListener('afterprint', afterPrint);
