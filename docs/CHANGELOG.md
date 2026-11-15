@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1
+
+- SVG figures sized in millimetres, centimetres or inches keep their size in reports and slides,
+  and a figure with icons nested in it takes the size of the whole figure, not of an icon.
+
 ## 0.6.0
 
 - In code flower's page, a figure the user clicks opens over the whole window, full size, to
