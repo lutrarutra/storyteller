@@ -160,7 +160,14 @@ _SVG_JUNK = [
     re.compile(rb"<!--.*?-->\s*", re.DOTALL),
     re.compile(rb"<metadata>.*?</metadata>\s*", re.DOTALL),
 ]
-_SVG_SIZE = re.compile(rb'<svg[^>]*?\swidth="([\d.]+)(pt|px)?"[^>]*?\sheight="([\d.]+)(pt|px)?"', re.DOTALL)
+_SVG_ROOT = re.compile(rb"<svg\b[^>]*>", re.DOTALL)
+# CSS pixels per unit, for an SVG's width and height (figures are often sized in mm).
+_SVG_UNITS = {b"": 1.0, b"px": 1.0, b"pt": 4 / 3, b"pc": 16.0, b"in": 96.0, b"cm": 96 / 2.54, b"mm": 96 / 25.4}
+
+
+def _svg_length(tag: bytes, name: bytes) -> int | None:
+    match = re.search(rb'\s' + name + rb'="([\d.]+)\s*(px|pt|pc|in|cm|mm)?"', tag)
+    return round(float(match.group(1)) * _SVG_UNITS[match.group(2) or b""]) if match else None
 
 
 def encode_svg(data: bytes) -> Asset:
@@ -168,10 +175,10 @@ def encode_svg(data: bytes) -> Asset:
     for pattern in _SVG_JUNK:
         data = pattern.sub(b"", data)
     data = re.sub(rb">\s+<", b"><", data).strip()
-    width = height = None
-    match = _SVG_SIZE.search(data)
-    if match:
-        to_px = 4 / 3 if match.group(2) == b"pt" else 1.0
-        width = round(float(match.group(1)) * to_px)
-        height = round(float(match.group(3)) * (4 / 3 if match.group(4) == b"pt" else 1.0))
+    # The size of the root <svg> only: icons inlined in a figure are <svg> elements of their own.
+    root = _SVG_ROOT.search(data)
+    width = _svg_length(root.group(0), b"width") if root else None
+    height = _svg_length(root.group(0), b"height") if root else None
+    if width is None or height is None:
+        width = height = None
     return Asset(data, "image/svg+xml", width, height)

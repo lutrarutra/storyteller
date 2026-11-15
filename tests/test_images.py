@@ -97,6 +97,15 @@ def test_svg_size_is_read():
     assert asset.data == b'<svg width="72pt" height="36pt"></svg>'
 
 
+def test_svg_size_is_the_root_size_in_any_unit():
+    figure = (b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 186 66" width="186mm" height="66mm">'
+              b'<g><svg x="0" y="0" width="34" height="20" viewBox="0 0 10 6"/></g></svg>')
+    assert (encode_svg(figure).width, encode_svg(figure).height) == (703, 249)
+    assert (encode_svg(b'<svg width="2in" height="1in"/>').width, encode_svg(b'<svg width="2in" height="1in"/>').height) == (192, 96)
+    unsized = encode_svg(b'<svg viewBox="0 0 10 10"><svg width="34" height="20"/></svg>')
+    assert (unsized.width, unsized.height) == (None, None)
+
+
 def test_shrink_makes_smaller_or_keeps():
     rng = np.random.default_rng(1)
     photo = encode_raster(Image.fromarray(rng.integers(0, 255, (1000, 1000, 3), dtype=np.uint8)))
