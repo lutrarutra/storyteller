@@ -166,7 +166,7 @@ _SVG_UNITS = {b"": 1.0, b"px": 1.0, b"pt": 4 / 3, b"pc": 16.0, b"in": 96.0, b"cm
 
 
 def _svg_length(tag: bytes, name: bytes) -> int | None:
-    match = re.search(rb'\s' + name + rb'="([\d.]+)\s*(px|pt|pc|in|cm|mm)?"', tag)
+    match = re.search(rb"\s" + name + rb'="([\d.]+)\s*(px|pt|pc|in|cm|mm)?"', tag)
     return round(float(match.group(1)) * _SVG_UNITS[match.group(2) or b""]) if match else None
 
 
