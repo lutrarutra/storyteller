@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.2
+
+- Parts moved with `move()` keep their new order when saved, also when another script
+  rewrites a part afterwards, and the move no longer writes back stale copies of parts other
+  scripts changed.
+
 ## 0.6.1
 
 - SVG figures sized in millimetres, centimetres or inches keep their size in reports and slides,
