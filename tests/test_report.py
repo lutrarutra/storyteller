@@ -228,7 +228,9 @@ def test_moved_order_survives_another_script_rewriting_a_section():
     report = _abc_report()
     report.move("c", before="a")
     report.save()
-    rewrite = "import storyteller as sty\nr = sty.Report.open('reports/t')\nwith r.section('b', 'B'):\n    r.text('b2')\n"
+    rewrite = (
+        "import storyteller as sty\nr = sty.Report.open('reports/t')\nwith r.section('b', 'B'):\n    r.text('b2')\n"
+    )
     subprocess.run([sys.executable, "-c", rewrite], check=True)
     assert _disk_order() == ["c", "a", "b"]
     assert "b2" in (Path("reports") / "t.html").read_text()
