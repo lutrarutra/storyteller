@@ -102,6 +102,7 @@ class LiveDocument:
         self._stack: list[dict[str, Any]] = []  # open containers (sections, slides, grids, tabs)
         self._touched: dict[str, None] = {}  # top-level or section keys this process wrote, in order
         self._removed: set[str] = set()
+        self._order_moved = False  # set by move(): the next merge applies this process's top-level order
         self._auto_keys: dict[str, int] = {}
         self._lock = threading.RLock()
         self._dirty = False
@@ -168,6 +169,7 @@ class LiveDocument:
             open_key = self._stack[0].get("key") if self._stack else None
             self._touched = {open_key: None} if open_key else {}
             self._removed.clear()
+            self._order_moved = False
             self._meta_changes = {}
         self._saved()
         return target
@@ -208,6 +210,12 @@ class LiveDocument:
             else:
                 position = len(merged["nodes"])
             merged["nodes"].insert(position, node)
+        if self._order_moved:
+            # move() reordered the top level: put the keys this process knows in its order, in the
+            # slots they hold on disk, so parts only other scripts wrote keep their positions.
+            rank = {k: i for i, k in enumerate(local_keys) if k}
+            known = iter(sorted((n for n in merged["nodes"] if n.get("key") in rank), key=lambda n: rank[n["key"]]))
+            merged["nodes"] = [next(known) if n.get("key") in rank else n for n in merged["nodes"]]
         # Keep the open containers pointing into the merged tree.
         self._doc = merged
         self._rebind_stack()
@@ -364,10 +372,8 @@ class LiveDocument:
                 nodes.insert(index, node)
                 raise KeyError(f"no top-level part {anchor!r}")
             nodes.insert(target if before else target + 1, node)
-            # Order is not merged node by node: write the whole order.
-            for other in nodes:
-                if other.get("key"):
-                    self._touched[other["key"]] = None
+            # The merge keeps disk positions for touched keys; have it apply this order on the next save.
+            self._order_moved = True
             self._changed()
 
 

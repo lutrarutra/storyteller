@@ -99,6 +99,18 @@ def test_two_scripts_fill_one_deck():
     assert [texts(s)[0] for s in read_pptx().slides] == ["A", "B"]
 
 
+def test_moved_slides_are_saved():
+    d = sty.Deck.open("decks/d", title="A deck")
+    for key in ("a", "b", "c"):
+        with d.slide(key, key.upper()):
+            d.text(key)
+    d.save()
+    d.move("c", before="a")
+    d.close()
+    assert [n["key"] for n in sty.Deck.open("decks/d")._doc["nodes"]] == ["c", "a", "b"]
+    assert [texts(s)[0] for s in read_pptx().slides] == ["C", "A", "B"]
+
+
 def test_layouts_follow_the_blocks():
     d = sty.Deck.open("decks/d", title="A deck")
     with d.slide("cover", "Cover"):

@@ -203,6 +203,62 @@ def test_two_scripts_fill_one_report(tmp_path):
     assert "from <code>write.py</code>".lower() in html.lower()
 
 
+def _disk_order(path="reports/t"):
+    return [n.get("key") for n in sty.Report.open(path)._doc["nodes"]]
+
+
+def _abc_report():
+    report = sty.Report.open("reports/t", title="move test")
+    for key in ("a", "b", "c"):
+        with report.section(key, key.upper()):
+            report.text(key)
+    report.save()
+    return report
+
+
+def test_move_is_saved():
+    report = _abc_report()
+    report.move("c", before="a")
+    report.save()
+    assert _disk_order() == ["c", "a", "b"]
+    assert _sections((Path("reports") / "t.html").read_text()) == ["c", "a", "b"]
+
+
+def test_moved_order_survives_another_script_rewriting_a_section():
+    report = _abc_report()
+    report.move("c", before="a")
+    report.save()
+    rewrite = "import storyteller as sty\nr = sty.Report.open('reports/t')\nwith r.section('b', 'B'):\n    r.text('b2')\n"
+    subprocess.run([sys.executable, "-c", rewrite], check=True)
+    assert _disk_order() == ["c", "a", "b"]
+    assert "b2" in (Path("reports") / "t.html").read_text()
+
+
+def test_move_keeps_other_scripts_parts_and_their_content():
+    report = _abc_report()
+    other = sty.Report.open("reports/t")
+    with other.section("x", "X"):
+        other.text("x")
+    with other.section("b", "B"):
+        other.text("b from the other script")
+    other.close()
+    report.move("c", before="a")
+    report.save()
+    assert _disk_order() == ["c", "a", "b", "x"]
+    html = (Path("reports") / "t.html").read_text()
+    assert "b from the other script" in html  # the move does not write back this process's stale copy of b
+
+
+def test_move_to_a_missing_anchor_changes_nothing():
+    report = _abc_report()
+    with pytest.raises(KeyError):
+        report.move("c", before="nope")
+    with pytest.raises(KeyError):
+        report.move("nope", before="a")
+    report.save()
+    assert _disk_order() == ["a", "b", "c"]
+
+
 def test_autosave_is_debounced(tmp_path, monkeypatch):
     report = sty.Report.open(tmp_path / "r", title="x")
     saves = []
