@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.3
+
+- The skill describes the report tab's Interactive and Static views in VS Code and the app.
+
 ## 0.6.2
 
 - Parts moved with `move()` keep their new order when saved, also when another script
