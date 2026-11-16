@@ -188,8 +188,8 @@ with r.section("qc", "Quality control"):
 ## Showing it
 
 - `codeflower-show reports/pbmc.html --message "..."` once. The tab follows every change.
-- The VS Code preview runs without scripts and shows the static snapshots. The user can
-  press **Open interactive** in the tab header for live charts.
+- The user's tab shows a report **Interactive**, with live charts; its **Static** view runs
+  no scripts and shows the snapshots.
 - `storyteller serve reports/pbmc` serves it with live updates at
   http://127.0.0.1:8765 for browsers outside VS Code.
 
