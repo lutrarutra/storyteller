@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from markdown_it import MarkdownIt
+from markdown_it.common.utils import escapeHtml
 
 # An image source that names an asset; render.py swaps it for the asset's data URI.
 ASSET_SCHEME = "cfasset:"
@@ -40,7 +41,14 @@ def _parser(allow_html: bool) -> MarkdownIt:
             token.attrSet(REF_ATTR, unquote(href[1:]))
         return md.renderer.renderToken(tokens, idx, options, env)
 
+    def code_inline(self, tokens, idx, options, env):
+        # A path may break after each "/", so a long one wraps instead of stretching its line.
+        token = tokens[idx]
+        content = escapeHtml(token.content).replace("/", "/<wbr>")
+        return f"<code{self.renderAttrs(token)}>{content}</code>"
+
     md.add_render_rule("heading_open", heading_open)
+    md.add_render_rule("code_inline", code_inline)
     md.add_render_rule("link_open", link_open)
     return md
 

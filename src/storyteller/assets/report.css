@@ -784,6 +784,14 @@ body {
   grid-column: 2;
 }
 
+/* Error messages: wrap long lines (and unbroken tokens like paths) inside the callout. */
+.cf-callout pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 0.8rem/1.55 var(--cf-mono);
+}
+
 .cf-callout .cf-text > :first-child {
   margin-top: 0;
 }
