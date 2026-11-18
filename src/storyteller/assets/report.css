@@ -24,6 +24,8 @@
   font: 400 15px/1.6 var(--cf-font);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* No lone word (or "%") on a last line, in prose, captions, tiles and headings alike. */
+  text-wrap: pretty;
 }
 
 .cf-report *,
@@ -562,6 +564,16 @@ body {
 .cf-text ul,
 .cf-text ol {
   margin: 0.7em 0;
+}
+
+/* Prose is justified (and hyphenated, so lines don't gape) where the column is wide enough.
+   Narrow columns stay ragged: there, justifying leaves rivers. */
+@media (min-width: 720px) {
+  .cf-text p,
+  .cf-text li {
+    text-align: justify;
+    hyphens: auto;
+  }
 }
 
 .cf-text li + li {
