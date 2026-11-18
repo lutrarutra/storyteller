@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.4
+
+- Long paths in inline code and long lines in a failed section's error message wrap inside
+  their column instead of stretching it.
+- Report prose is justified and hyphenated in wide columns, and no word is left alone on the
+  last line of a paragraph, caption or heading.
+
 ## 0.6.3
 
 - The skill describes the report tab's Interactive and Static views in VS Code and the app.
