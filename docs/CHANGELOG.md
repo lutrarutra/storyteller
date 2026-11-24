@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.5
+
+- Report text and captions take the column's full width, like the figures and tables beside them.
+- A section moved with `move()` also moves in a report that is open, without reloading it.
+
 ## 0.6.4
 
 - Long paths in inline code and long lines in a failed section's error message wrap inside
