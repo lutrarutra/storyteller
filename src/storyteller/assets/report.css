@@ -554,11 +554,7 @@ body {
   }
 }
 
-/* -- text */
-
-.cf-text {
-  max-width: 72ch;
-}
+/* -- text: the column's full width, like figures and tables beside it (the sheet keeps lines readable) */
 
 .cf-text p,
 .cf-text ul,
@@ -642,7 +638,6 @@ body {
   margin-top: 8px;
   color: var(--cf-muted);
   font-size: 0.86rem;
-  max-width: 72ch;
 }
 
 .cf-caption-label {
