@@ -22,13 +22,19 @@
 
 A Python library for single-file HTML reports of a data analysis, with figures, interactive charts,
 cross-references and reader comments, in [code flower](https://docs.codeflower.app)'s look. code flower's
-agent writes its reports with it; it works anywhere Python does.
+agent writes its reports with it; it works anywhere Python does. It also builds editable PowerPoint
+decks the same way ([Slide decks](#slide-decks)).
+
+<p align="center">
+  <img src="assets/report.png" width="800" alt="The top of a storyteller report: title, summary, headline numbers and the first section">
+</p>
 
 ## Install
 
 ```sh
 pip install "storyteller[plot]"     # with matplotlib, plotly, pandas, numpy
 pip install "storyteller[pdf]"      # PDF export via playwright (then: playwright install chromium)
+pip install "storyteller[deck]"     # PowerPoint decks (also needs LibreOffice, see below)
 ```
 
 The only hard dependencies are Pillow and markdown-it-py; matplotlib, plotly, pandas, numpy, polars,
@@ -87,6 +93,43 @@ storyteller palette | demo
 - **Prints well.** A4 or Letter pages with margins, page numbers and charts sized to the page.
 - **Small.** Images are encoded losslessly or lossily by content, and a size budget shrinks them when
   needed.
+
+## Slide decks
+
+`sty.Deck` builds a PowerPoint deck (`.pptx`) the way `Report` builds a report: keyed slides, saved
+live, and re-running a script replaces its slides.
+
+<p align="center">
+  <img src="assets/slides.png" width="800" alt="Four slides: headline numbers, a process flow, bullets beside a figure, and a native bar chart">
+</p>
+
+```python
+import storyteller as sty
+
+sty.theme.use()
+d = sty.Deck.open("decks/pbmc", title="PBMC cell types")
+with d.slide("intro", "PBMC cell types", subtitle="Eight cell types in 9,871 cells"):
+    d.notes("Open with the question.")                      # speaker notes
+with d.section("qc", "Quality control"):                    # a section header slide, then its slides
+    with d.slide("qc-cut", "Damaged cells form the low tail"):
+        d.figure(fig, caption="Genes per cell; dashed: the cut-off.")
+    with d.slide("types", "T cells and monocytes make up two thirds"):
+        d.chart(counts, "bar", x="cell_type", y=["donor A", "donor B"])
+d.finalize()                                                # decks/pbmc.pptx and decks/pbmc.pdf
+```
+
+- **Editable in PowerPoint.** `d.chart` makes native charts whose data you can edit; `d.flow`,
+  `d.cards`, `d.callout` and `d.metrics` are native shapes; matplotlib figures go in as SVG.
+- **Layouts follow the blocks:** no block gives a title or statement slide, one block fills the
+  slide, two sit side by side.
+- **Your template.** `Deck.open(..., template="brand.potx")` uses its masters, layouts, colours and
+  fonts; without one the deck is in code flower's look, light or `mode="dark"`.
+- **You see what you get.** LibreOffice draws every slide as it changes; `decks/pbmc.html` shows
+  them, and the script prints each slide's PNG when it ends.
+
+Decks need the `deck` extra (python-pptx, pypdfium2) and LibreOffice (`soffice` on `PATH`, the macOS
+app, or `STORYTELLER_SOFFICE`). Without LibreOffice the `.pptx` is still written, but the slides are
+not drawn and `finalize` writes no PDF.
 
 ## Colours
 
