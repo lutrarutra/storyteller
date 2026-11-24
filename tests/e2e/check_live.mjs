@@ -66,6 +66,22 @@ with r.section("later", "Later"):
   check(await page.locator('#s-later').textContent().then((t) => t.includes('filled in')), 'planned section filled in');
   const order = await page.evaluate(() => [...document.querySelectorAll('[data-cf-slot] > section')].map((s) => s.id));
   check(JSON.stringify(order) === JSON.stringify(['s-later', 's-qc', 's-notes']), `section order kept: ${order.join(', ')}`);
+
+  // A move may change no section's hash, or only renumber them in place: they must still move.
+  await page.waitForTimeout(1000); // the last save's update has arrived
+  await page.evaluate(() => (document.querySelector('#s-later').__kept = true));
+  run(`
+import storyteller as sty
+r = sty.Report.open("reports/live")
+r.move("notes", before="qc")
+`);
+  const sections = () => page.evaluate(() => [...document.querySelectorAll('[data-cf-slot] > section')].map((s) => s.id).join(','));
+  await page.waitForFunction(() => [...document.querySelectorAll('[data-cf-slot] > section')].map((s) => s.id).join(',') === 's-later,s-notes,s-qc', null, { timeout: 10000 }).catch(() => {});
+  check((await sections()) === 's-later,s-notes,s-qc', `moved section moved in the open page: ${await sections()}`);
+  const toc = await page.evaluate(() => [...document.querySelectorAll('.cf-toc a')].map((a) => a.getAttribute('href')).join(','));
+  check(toc.indexOf('#s-notes') < toc.indexOf('#s-qc'), `contents follow the new order: ${toc}`);
+  check((await page.evaluate(() => window.__marker)) === 'same page', 'move patched in place, not reloaded');
+  check(await page.evaluate(() => document.querySelector('#s-later').__kept === true), 'section the move did not touch kept as it was');
   check(errors.length === 0, `no page errors ${errors.join(' | ')}`);
 } finally {
   await browser.close();

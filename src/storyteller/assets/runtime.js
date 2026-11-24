@@ -924,6 +924,7 @@
         element.remove();
       }
     }
+    if (!reorder(nextRoot, parts)) return false;
     for (const id of ['cf-theme', 'cf-comments']) {
       const fresh = next.getElementById(id);
       const old = document.getElementById(id);
@@ -932,6 +933,29 @@
     document.title = next.title;
     setupToc();
     global.cfComments?.refresh(); // highlights again, in the new text
+    return true;
+  }
+
+  /**
+   * Puts the kept parts in the new page's order, slot by slot: a moved section (or a slide
+   * moved to another section) keeps its hash, so the pass above leaves it where it was.
+   * Only parts out of place are moved, so the rest keep their plots and settings.
+   */
+  function reorder(nextRoot, parts) {
+    const live = new Map(parts(root).map((element) => [element.dataset.cfPart, element]));
+    for (const nextSlot of nextRoot.querySelectorAll('[data-cf-slot]')) {
+      const name = nextSlot.dataset.cfSlot;
+      const slot = [...root.querySelectorAll('[data-cf-slot]')].find((element) => element.dataset.cfSlot === name);
+      if (!slot) return false;
+      let previous = null;
+      for (const incoming of nextSlot.children) {
+        const element = incoming.dataset.cfPart && live.get(incoming.dataset.cfPart);
+        if (!element) continue;
+        const expected = previous ? previous.nextElementSibling : slot.firstElementChild;
+        if (element !== expected) slot.insertBefore(element, expected);
+        previous = element;
+      }
+    }
     return true;
   }
 
