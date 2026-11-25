@@ -63,7 +63,11 @@ with r.section("later", "Later"):
   check(true, 'changed section updated in the open page');
   check((await page.evaluate(() => window.__marker)) === 'same page', 'page patched in place, not reloaded');
   check((await input.inputValue()) === '1500', 'unchanged section kept its explorer setting');
-  check(await page.locator('#s-later').textContent().then((t) => t.includes('filled in')), 'planned section filled in');
+  // Each section saves the report as it closes, so the later one may arrive in a second update.
+  const filled = await page
+    .waitForFunction(() => document.querySelector('#s-later')?.textContent.includes('filled in'), null, { timeout: 10000 })
+    .then(() => true, () => false);
+  check(filled, 'planned section filled in');
   const order = await page.evaluate(() => [...document.querySelectorAll('[data-cf-slot] > section')].map((s) => s.id));
   check(JSON.stringify(order) === JSON.stringify(['s-later', 's-qc', 's-notes']), `section order kept: ${order.join(', ')}`);
 
