@@ -541,7 +541,11 @@ def _score_bar(row: dict[str, Any]) -> str:
         aria = f"{label}: {_number(value)} of {_number(top)}"
         attrs = f' data-status="{escape(status)}"'
     kind = "cf-score-steps" if steps else "cf-score-track"
-    note = f'<span class="cf-score-note" title="{escape(row["note"])}">{escape(row["note"])}</span>' if row.get("note") else ""
+    note = (
+        f'<span class="cf-score-note" title="{escape(row["note"])}">{escape(row["note"])}</span>'
+        if row.get("note")
+        else ""
+    )
     style = f' style="grid-template-columns:repeat({len(steps)},1fr)"' if steps else ""
     return (
         f'<div class="cf-score"{attrs}><span class="cf-score-label">{label}</span>'
@@ -565,7 +569,11 @@ def _score_stacked(row: dict[str, Any]) -> str:
         zero = "" if count else " data-zero"
         legend.append(f'<li{zero}><i data-tone="{tone}"></i>{name} <b>{_number(count)}</b></li>')
     aria = f"{label}: " + ", ".join(f"{escape(s['name'])} {_number(s['count'])}" for s in segments)
-    note = f'<span class="cf-score-note" title="{escape(row["note"])}">{escape(row["note"])}</span>' if row.get("note") else ""
+    note = (
+        f'<span class="cf-score-note" title="{escape(row["note"])}">{escape(row["note"])}</span>'
+        if row.get("note")
+        else ""
+    )
     empty = "" if total else ' data-na=""'
     return (
         f'<div class="cf-score cf-score-stack"{empty}>'
@@ -599,7 +607,13 @@ def _scores(node, ctx: Context, depth: int, attrs: str) -> str:
     )
 
 
-IDEA_STATUS_LABELS = {"idea": "idea", "active": "in progress", "blocked": "blocked", "done": "done", "dropped": "dropped"}
+IDEA_STATUS_LABELS = {
+    "idea": "idea",
+    "active": "in progress",
+    "blocked": "blocked",
+    "done": "done",
+    "dropped": "dropped",
+}
 
 
 def _idea_card(idea, by_id, also, ctx: Context) -> str:
@@ -679,8 +693,14 @@ def _ideas(node, ctx: Context, depth: int, attrs: str) -> str:
     counts = {}
     for idea in ideas:
         counts[idea["status"]] = counts.get(idea["status"], 0) + 1
-    summary = " · ".join(f"{counts[status]} {label}" for status, label in IDEA_STATUS_LABELS.items() if counts.get(status))
-    summary = f'<p class="cf-ideas-summary">{len(ideas)} idea{"" if len(ideas) == 1 else "s"}: {summary}</p>' if ideas else '<p class="cf-ideas-summary">No ideas yet.</p>'
+    summary = " · ".join(
+        f"{counts[status]} {label}" for status, label in IDEA_STATUS_LABELS.items() if counts.get(status)
+    )
+    summary = (
+        f'<p class="cf-ideas-summary">{len(ideas)} idea{"" if len(ideas) == 1 else "s"}: {summary}</p>'
+        if ideas
+        else '<p class="cf-ideas-summary">No ideas yet.</p>'
+    )
     body = f'<ul class="cf-ideas-tree">{tree}{rest}</ul>' if ideas else ""
     return f'<div class="cf-block cf-ideas"{attrs}>{head}{summary}{body}</div>'
 

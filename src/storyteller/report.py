@@ -172,7 +172,11 @@ def idea_items(data: Any) -> list[dict[str, Any]]:
         data = data.get("ideas", [])
     out: list[dict[str, Any]] = []
     for idea in data:
-        if not isinstance(idea, Mapping) or not isinstance(idea.get("id"), int) or not str(idea.get("title", "")).strip():
+        if (
+            not isinstance(idea, Mapping)
+            or not isinstance(idea.get("id"), int)
+            or not str(idea.get("title", "")).strip()
+        ):
             raise ValueError(f"each idea needs an id and a title, not {idea!r}")
         status = idea.get("status", "active")
         if status not in IDEA_STATUSES:

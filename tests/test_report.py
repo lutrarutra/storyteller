@@ -621,7 +621,13 @@ def test_scores_reject_bad_values(tmp_path):
 
 ROOTS = {
     "ideas": [
-        {"id": 1, "title": "Audit doi:10.1/x", "status": "active", "from": [], "chats": [{"agent": "claude", "sessionId": "s1"}]},
+        {
+            "id": 1,
+            "title": "Audit doi:10.1/x",
+            "status": "active",
+            "from": [],
+            "chats": [{"agent": "claude", "sessionId": "s1"}],
+        },
         {
             "id": 2,
             "title": "Get the data <GEO>",
@@ -632,7 +638,13 @@ ROOTS = {
             "conclusion": "All **three** samples are there.",
             "comments": [{"by": "user", "text": "Use the raw counts", "at": "2026-11-25"}],
         },
-        {"id": 3, "title": "Fig. 2", "status": "blocked", "from": [1, 2], "needs": [{"idea": 2}, {"text": "GPU", "met": False}]},
+        {
+            "id": 3,
+            "title": "Fig. 2",
+            "status": "blocked",
+            "from": [1, 2],
+            "needs": [{"idea": 2}, {"text": "GPU", "met": False}],
+        },
         {"id": 4, "title": "Loop A", "status": "dropped", "from": [5]},
         {"id": 5, "title": "Loop B", "status": "idea", "from": [4]},
     ],
