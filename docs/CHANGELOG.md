@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0
 
 - `r.scores()` draws a scorecard: one bar per row on a fixed scale, ordinal steps, stacked counts, n/a
   rows, badges and a footnote, in the order given, so reports in a series line up.
