@@ -67,6 +67,78 @@ class Metric:
     status: Literal["good", "warning", "critical"] | None = None
 
 
+Status = Literal["good", "warning", "critical", "info"]
+# Segment tones of a StackedBar: the statuses, their lighter variants, and neutral for "the rest".
+TONES = ("good", "good-soft", "warning", "critical", "critical-soft", "info", "neutral", "neutral-soft")
+
+
+@dataclass(frozen=True)
+class ScoreBar:
+    """One row of a `scores` block: a bar from 0 to `max`, or `steps` cells for an ordinal scale.
+
+    `value` None shows the row greyed out as "n/a", with `note` saying why. With `steps` (the
+    scale's levels from worst to best), `value` is the index of the level reached."""
+
+    label: str
+    value: float | None
+    max: float = 1.0
+    steps: Sequence[str] | None = None
+    display: str | None = None
+    status: Status | None = None
+    note: str | None = None
+
+
+@dataclass(frozen=True)
+class StackedBar:
+    """One row of a `scores` block: counts split into segments, in the order given, with a legend.
+    Each segment is ``(name, count, tone)``, tone one of `TONES`."""
+
+    label: str
+    segments: Sequence[tuple[str, float, str]]
+    note: str | None = None
+
+
+def score_rows(rows: Sequence[ScoreBar | StackedBar]) -> list[dict[str, Any]]:
+    """The rows of a `scores` block as plain data, checked."""
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        if isinstance(row, StackedBar):
+            segments = []
+            for name, count, tone in row.segments:
+                if tone not in TONES:
+                    raise ValueError(f"segment tone must be one of {', '.join(TONES)}, not {tone!r}")
+                if count < 0:
+                    raise ValueError(f"segment {name!r} has a negative count")
+                segments.append({"name": str(name), "count": float(count), "tone": tone})
+            out.append({"kind": "stacked", "label": row.label, "segments": segments, "note": row.note})
+        elif isinstance(row, ScoreBar):
+            entry: dict[str, Any] = {
+                "kind": "bar",
+                "label": row.label,
+                "value": None if row.value is None else float(row.value),
+                "status": row.status,
+                "note": row.note,
+                "display": row.display,
+            }
+            if row.status is not None and row.status not in ("good", "warning", "critical", "info"):
+                raise ValueError(f"status must be good, warning, critical or info, not {row.status!r}")
+            if row.steps is not None:
+                steps = [str(step) for step in row.steps]
+                if not steps:
+                    raise ValueError(f"{row.label!r}: steps is empty")
+                if row.value is not None and not (0 <= row.value < len(steps) and float(row.value).is_integer()):
+                    raise ValueError(f"{row.label!r}: value must be a step index from 0 to {len(steps) - 1}")
+                entry["steps"] = steps
+            else:
+                if row.max <= 0:
+                    raise ValueError(f"{row.label!r}: max must be positive")
+                entry["max"] = float(row.max)
+            out.append(entry)
+        else:
+            raise TypeError("scores rows must be ScoreBar or StackedBar")
+    return out
+
+
 def metric_entries(
     items: Mapping[str, Any] | Sequence[Metric | Mapping[str, Any] | tuple[Any, ...]],
 ) -> list[dict[str, str]]:
@@ -84,6 +156,52 @@ def metric_entries(
         entry["value"] = value if isinstance(value, str) else tables.format_value(value)
         entries.append({k: str(v) for k, v in entry.items() if v is not None})
     return entries
+
+
+IDEA_STATUSES = ("idea", "active", "blocked", "done", "dropped")
+
+
+def idea_items(data: Any) -> list[dict[str, Any]]:
+    """The ideas of a map as plain data, checked: what `codeflower-roots tree --json` prints
+    ({"ideas": [...]}), its list of ideas, or the path of a JSON file holding either. Each idea keeps
+    its id, title, status, what it builds on and needs, its todos, files, conclusion and comments;
+    the chats that worked on it are left out (session ids mean nothing to a reader)."""
+    if isinstance(data, (str, Path)):
+        data = json.loads(Path(data).read_text(encoding="utf-8"))
+    if isinstance(data, Mapping):
+        data = data.get("ideas", [])
+    out: list[dict[str, Any]] = []
+    for idea in data:
+        if not isinstance(idea, Mapping) or not isinstance(idea.get("id"), int) or not str(idea.get("title", "")).strip():
+            raise ValueError(f"each idea needs an id and a title, not {idea!r}")
+        status = idea.get("status", "active")
+        if status not in IDEA_STATUSES:
+            raise ValueError(f"idea {idea['id']}: status must be one of {', '.join(IDEA_STATUSES)}, not {status!r}")
+        needs = []
+        for need in idea.get("needs") or []:
+            if isinstance(need.get("idea"), int):
+                needs.append({"idea": need["idea"]})
+            elif isinstance(need.get("text"), str):
+                needs.append({"text": need["text"], "met": bool(need.get("met"))})
+        out.append(
+            {
+                "id": idea["id"],
+                "title": str(idea["title"]).strip(),
+                "status": status,
+                "from": [int(parent) for parent in idea.get("from") or []],
+                "needs": needs,
+                "todos": [{"text": str(t["text"]), "done": bool(t.get("done"))} for t in idea.get("todos") or []],
+                "files": [str(file) for file in idea.get("files") or []],
+                "conclusion": str(idea.get("conclusion") or "").strip(),
+                "comments": [
+                    {"by": str(c.get("by") or ""), "text": str(c["text"]), "at": str(c.get("at") or "")}
+                    for c in idea.get("comments") or []
+                    if isinstance(c, Mapping) and isinstance(c.get("text"), str)
+                ],
+            }
+        )
+    out.sort(key=lambda idea: idea["id"])
+    return out
 
 
 class Report(LiveDocument):
@@ -195,7 +313,7 @@ class Report(LiveDocument):
     def _ordered(self) -> dict[str, Any]:
         """The document with summary and metrics first and provenance last, wherever they were added."""
         nodes = self._doc["nodes"]
-        first = [n for n in nodes if n["type"] in ("summary",)]
+        first = [n for n in nodes if n.get("top")] + [n for n in nodes if n["type"] in ("summary",)]
         second = [n for n in nodes if n["type"] == "metrics" and n.get("key") == "metrics"]
         last = [n for n in nodes if n["type"] == "provenance"]
         middle = [n for n in nodes if n not in first and n not in second and n not in last]
@@ -367,6 +485,76 @@ class Report(LiveDocument):
         node = {"type": "metrics", "items": metric_entries(items)}
         if self._container() is None and key is None:
             key = "metrics"
+        return self._add(node, key)
+
+    def scores(
+        self,
+        rows: Sequence[ScoreBar | StackedBar],
+        *,
+        title: str | None = None,
+        subtitle: str | None = None,
+        badges: Sequence[str | tuple[str, Status]] = (),
+        footnote: str | None = None,
+        top: bool = False,
+        key: str | None = None,
+    ) -> str | None:
+        """A scorecard: bars on fixed scales, one row each, in the order given.
+
+        For reports in a series that must look alike (audits, benchmarks), build the rows in code
+        from data, never by hand. `subtitle` and `footnote` are Markdown; `badges` are short labels,
+        optionally with a status. `top` puts the block above the summary."""
+        node: dict[str, Any] = {"type": "scores", "rows": score_rows(rows)}
+        if title:
+            node["title"] = title
+        embedded: list[str] = []
+        for field, text in (("subtitle_html", subtitle), ("footnote_html", footnote)):
+            if text:
+                html, more = self._markdown(text)
+                node[field] = html
+                embedded += more
+        if embedded:
+            node["embedded"] = embedded
+        if badges:
+            node["badges"] = [
+                {"label": badge} if isinstance(badge, str) else {"label": badge[0], "status": badge[1]}
+                for badge in badges
+            ]
+        if top:
+            node["top"] = True
+        return self._add(node, key)
+
+    def ideas(
+        self,
+        data: Any,
+        *,
+        title: str | None = "Map of ideas",
+        subtitle: str | None = None,
+        comments: bool = True,
+        key: str | None = None,
+    ) -> str | None:
+        """A map of ideas: lines of work as a tree, each with its status, todos, needs, files,
+        conclusion and comments. `data` is code flower's Roots map, as `codeflower-roots tree --json`
+        prints it (or its ideas, or the path of a JSON file with them). Drawn without scripts, so it
+        prints and stays in a report that allows none. `comments=False` leaves the comments out."""
+        ideas = idea_items(data)
+        embedded: list[str] = []
+        for idea in ideas:
+            conclusion = idea.pop("conclusion")
+            if conclusion:
+                html, more = self._markdown(conclusion)
+                idea["conclusion_html"] = html
+                embedded += more
+            if not comments:
+                idea["comments"] = []
+        node: dict[str, Any] = {"type": "ideas", "ideas": ideas}
+        if title:
+            node["title"] = title
+        if subtitle:
+            html, more = self._markdown(subtitle)
+            node["subtitle_html"] = html
+            embedded += more
+        if embedded:
+            node["embedded"] = embedded
         return self._add(node, key)
 
     def figure(

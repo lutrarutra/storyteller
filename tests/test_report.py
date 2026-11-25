@@ -563,3 +563,116 @@ def test_markdown_headings_and_links_render():
     html = report.render()
     assert "<h4>Heading</h4>" in html
     assert '<a href="https://example.org" target="_blank" rel="noopener noreferrer">site</a>' in html
+
+
+def _scorecard(report, **extra):
+    return report.scores(
+        [
+            sty.StackedBar("Key targets", [("exact", 3, "good"), ("close", 1, "good-soft"), ("failed", 0, "critical")]),
+            sty.ScoreBar("Reproduced", 0.75, status="good"),
+            sty.ScoreBar("Data", 2, max=3),
+            sty.ScoreBar("Ease", 1, steps=["very hard", "hard", "moderate", "easy"], status="warning"),
+            sty.ScoreBar("Consistency", None, note="no earlier attempts"),
+        ],
+        title="Scorecard <x>",
+        subtitle="Paper **one**",
+        badges=["Available", ("Reproduced", "good")],
+        footnote="From audit.json",
+        **extra,
+    )
+
+
+def test_scores_render_rows_in_order_with_na_and_steps(tmp_path):
+    report = sty.Report("x", tmp_path / "r.html")
+    _scorecard(report, key="card")
+    html = report.render()
+    assert check.check_html(html) == []
+    labels = re.findall(r'<span class="cf-score-label">([^<]+)</span>', html)
+    assert labels == ["Key targets", "Reproduced", "Data", "Ease", "Consistency"]
+    assert "Scorecard &lt;x&gt;" in html and "<strong>one</strong>" in html
+    assert 'style="width:75%"' in html  # 0.75 of 1
+    assert html.count('class="cf-score-tick"') == 2  # 0-3 scale: ticks at 1 and 2
+    assert html.count('cf-score-cell" data-on') == 2  # "hard" is step 2 of 4
+    assert '<span class="cf-score-value">hard</span>' in html
+    assert re.search(r'<div class="cf-score" data-na="">.*?n/a.*?no earlier attempts', html)
+    assert '<li data-zero><i data-tone="critical"></i>failed <b>0</b></li>' in html
+    assert 'class="cf-score-badge" data-status="good">Reproduced' in html
+
+
+def test_scores_on_top_come_before_the_summary(tmp_path):
+    report = sty.Report("x", tmp_path / "r.html")
+    report.summary("Findings.")
+    report.metrics({"n": 1})
+    _scorecard(report, top=True, key="card")
+    html = report.render()
+    assert html.index('class="cf-block cf-scores"') < html.index('class="cf-block cf-summary"')
+    assert report.outline().splitlines()[1].strip() == "[card] scores"
+
+
+def test_scores_reject_bad_values(tmp_path):
+    report = sty.Report("x", tmp_path / "r.html")
+    with pytest.raises(ValueError):
+        report.scores([sty.ScoreBar("Ease", 4, steps=["a", "b"])])
+    with pytest.raises(ValueError):
+        report.scores([sty.StackedBar("t", [("x", 1, "purple")])])
+    with pytest.raises(ValueError):
+        report.scores([sty.ScoreBar("r", 1, max=0)])
+
+
+ROOTS = {
+    "ideas": [
+        {"id": 1, "title": "Audit doi:10.1/x", "status": "active", "from": [], "chats": [{"agent": "claude", "sessionId": "s1"}]},
+        {
+            "id": 2,
+            "title": "Get the data <GEO>",
+            "status": "done",
+            "from": [1],
+            "todos": [{"text": "download GSE1", "done": True}, {"text": "check sums", "done": False}],
+            "files": ["data/GSE1.tsv"],
+            "conclusion": "All **three** samples are there.",
+            "comments": [{"by": "user", "text": "Use the raw counts", "at": "2026-11-25"}],
+        },
+        {"id": 3, "title": "Fig. 2", "status": "blocked", "from": [1, 2], "needs": [{"idea": 2}, {"text": "GPU", "met": False}]},
+        {"id": 4, "title": "Loop A", "status": "dropped", "from": [5]},
+        {"id": 5, "title": "Loop B", "status": "idea", "from": [4]},
+    ],
+    "errors": [],
+}
+
+
+def test_ideas_draw_the_map_as_a_tree_without_scripts(tmp_path):
+    report = sty.Report("x", tmp_path / "r.html")
+    report.ideas(ROOTS, key="plan")
+    html = report.render()
+    assert check.check_html(html) == []
+    start = html.index('class="cf-block cf-ideas"')
+    block = html[start : html.index("<script", start)]
+    assert not re.search(r"<[^>]*\son\w+=", block)  # no event handlers
+    # The tree: 2 and 3 under 1 (3 under its first parent, the other named).
+    assert re.search(r"#1</span>.*?cf-ideas-branch.*?#2</span>.*?#3</span>", block, re.S)
+    assert "Also builds on #2" in block
+    assert "Get the data &lt;GEO&gt;" in block and "<strong>three</strong>" in block
+    assert 'aria-label="Todos, 1 of 2 done"' in block
+    assert '<li data-met="true">#2 Get the data' in block and '<li data-met="false">GPU</li>' in block
+    assert "Use the raw counts" in block
+    # A circle has no origin, but its ideas are still shown; the chats never are.
+    assert "Loop A" in block and "Loop B" in block
+    assert "s1" not in block
+    assert "5 ideas: 1 idea · 1 in progress · 1 blocked · 1 done · 1 dropped" in block
+
+
+def test_ideas_without_comments_and_from_a_file(tmp_path):
+    path = tmp_path / "roots.json"
+    path.write_text(json.dumps(ROOTS))
+    report = sty.Report("x", tmp_path / "r.html")
+    report.ideas(path, comments=False, title="How the audit went")
+    html = report.render()
+    assert "How the audit went" in html and "Use the raw counts" not in html
+
+
+def test_ideas_reject_bad_ideas(tmp_path):
+    report = sty.Report("x", tmp_path / "r.html")
+    with pytest.raises(ValueError):
+        report.ideas([{"id": 1, "title": "x", "status": "maybe"}])
+    with pytest.raises(ValueError):
+        report.ideas([{"title": "no id"}])

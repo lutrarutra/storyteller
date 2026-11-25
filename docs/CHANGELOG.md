@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- `r.scores()` draws a scorecard: one bar per row on a fixed scale, ordinal steps, stacked counts, n/a
+  rows, badges and a footnote, in the order given, so reports in a series line up.
+- `r.ideas()` draws a map of ideas (code flower's Roots, as `codeflower-roots tree --json` prints it):
+  lines of work as a tree with their status, todos, needs, files, conclusion and comments, without
+  scripts.
+
 ## 0.6.5
 
 - Report text and captions take the column's full width, like the figures and tables beside them.

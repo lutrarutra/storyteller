@@ -71,6 +71,8 @@ How it behaves:
 |---|---|
 | `r.summary(md)` | The findings, always at the top of the report wherever you call it. One per report; not a section of your own. |
 | `r.metrics({...})` or `[sty.Metric(label, value, note=, status="good"/"warning"/"critical")]` | 2–6 headline numbers. |
+| `r.scores([sty.ScoreBar(label, value, max=1, steps=[...], status=, note=), sty.StackedBar(label, [(name, count, tone)])], title=, subtitle=, badges=, footnote=, top=)` | A scorecard: one bar per row on a fixed scale, in the order given; `value=None` greys the row out as n/a (say why in `note`); `steps` are an ordinal scale from worst to best and `value` is the index reached. `top=True` puts it above the summary. For reports in a series that must look alike (audits, benchmarks), build it in code from data, never by hand. |
+| `r.ideas(json.loads(subprocess.run(["codeflower-roots", "tree", "--json"], capture_output=True, text=True).stdout), title=)` | The project's map of ideas (Roots) as a tree: status, todos, conclusions, files, comments. Only when the user asks for it (or a skill such as codeflower-audit does); `comments=False` leaves the comments out. |
 | `r.text(md)` | Markdown prose. `![alt](figures/x.png)` images are embedded. |
 | `r.figure(obj, caption)` | matplotlib figure or axes, seaborn grid, PIL image, array, image path. Plotly figures go interactive. |
 | `r.plotly(fig, caption, static=mpl_fig)` | A chart the reader should hover or zoom (embeddings, dense scatter). |

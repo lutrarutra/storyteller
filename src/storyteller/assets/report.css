@@ -437,6 +437,263 @@ body {
   color: var(--cf-critical-status);
 }
 
+/* -- scores: a scorecard of bars on fixed scales */
+
+.cf-scores {
+  --cf-score-color: var(--cf-info-status);
+  margin: 20px 0;
+  padding: 16px 20px;
+  border: 1.5px solid var(--cf-soft-line);
+  border-radius: 14px;
+  background: var(--cf-card);
+}
+
+.cf-scores-head {
+  margin-bottom: 12px;
+}
+
+.cf-scores-title {
+  margin: 0;
+  font: 600 1.05rem/1.3 var(--cf-display);
+}
+
+.cf-scores-subtitle {
+  color: var(--cf-muted);
+  font-size: 0.85rem;
+}
+
+.cf-scores-subtitle p,
+.cf-scores-footnote p {
+  margin: 2px 0;
+}
+
+.cf-scores-rows {
+  display: grid;
+  /* Fixed columns: every scorecard of a series lines up, whatever its labels and values. */
+  grid-template-columns: 11rem minmax(0, 1fr) 7.5rem;
+  column-gap: 14px;
+  row-gap: 8px;
+  align-items: center;
+}
+
+.cf-score {
+  display: contents;
+}
+
+.cf-score-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.cf-score-track,
+.cf-score-segments {
+  position: relative;
+  display: flex;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--cf-neutral) 35%, var(--cf-card));
+}
+
+.cf-score-fill {
+  height: 100%;
+  border-radius: 6px;
+  background: var(--cf-score-color);
+}
+
+.cf-score-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1.5px;
+  background: var(--cf-card);
+}
+
+.cf-score-steps {
+  display: grid;
+  gap: 3px;
+  height: 12px;
+}
+
+.cf-score-cell {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--cf-neutral) 35%, var(--cf-card));
+}
+
+.cf-score-cell[data-on] {
+  background: var(--cf-score-color);
+}
+
+.cf-score-value {
+  overflow: hidden;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cf-score-note,
+.cf-score-legend {
+  grid-column: 2 / -1;
+  margin: -4px 0 2px;
+  color: var(--cf-muted);
+  font-size: 0.75rem;
+}
+
+/* One line, so every scorecard of a series keeps its rows in place; the full note is its title. */
+.cf-score-note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cf-score[data-status='good'] {
+  --cf-score-color: var(--cf-good-status);
+}
+
+.cf-score[data-status='warning'] {
+  --cf-score-color: var(--cf-warning-status);
+}
+
+.cf-score[data-status='critical'] {
+  --cf-score-color: var(--cf-critical-status);
+}
+
+.cf-score[data-na] .cf-score-label,
+.cf-score[data-na] .cf-score-value {
+  color: var(--cf-muted);
+}
+
+.cf-score[data-na] .cf-score-track,
+.cf-score[data-na] .cf-score-segments,
+.cf-score[data-na] .cf-score-cell {
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--cf-neutral) 25%, var(--cf-card)) 0 4px,
+    var(--cf-card) 4px 8px
+  );
+}
+
+.cf-score-segment {
+  flex-basis: 0;
+  height: 100%;
+}
+
+.cf-score-segment + .cf-score-segment {
+  border-left: 1.5px solid var(--cf-card);
+}
+
+.cf-score-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.cf-score-legend li[data-zero] {
+  opacity: 0.6;
+}
+
+.cf-score-legend i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 4px;
+  border-radius: 2px;
+  vertical-align: baseline;
+}
+
+[data-tone='good'] {
+  background: var(--cf-good-status);
+}
+
+[data-tone='good-soft'] {
+  background: color-mix(in srgb, var(--cf-good-status) 50%, var(--cf-card));
+}
+
+[data-tone='warning'] {
+  background: var(--cf-warning-status);
+}
+
+[data-tone='critical'] {
+  background: var(--cf-critical-status);
+}
+
+[data-tone='critical-soft'] {
+  background: color-mix(in srgb, var(--cf-critical-status) 50%, var(--cf-card));
+}
+
+[data-tone='info'] {
+  background: var(--cf-info-status);
+}
+
+[data-tone='neutral'] {
+  background: var(--cf-neutral);
+}
+
+[data-tone='neutral-soft'] {
+  background: color-mix(in srgb, var(--cf-neutral) 45%, var(--cf-card));
+}
+
+.cf-scores-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.cf-score-badge {
+  padding: 2px 10px;
+  border: 1.5px solid var(--cf-soft-line);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.cf-score-badge[data-status='good'] {
+  border-color: var(--cf-good-status);
+  color: var(--cf-good-status);
+}
+
+.cf-score-badge[data-status='warning'] {
+  border-color: var(--cf-warning-status);
+  color: var(--cf-warning-status);
+}
+
+.cf-score-badge[data-status='critical'] {
+  border-color: var(--cf-critical-status);
+  color: var(--cf-critical-status);
+}
+
+.cf-score-badge[data-status='info'] {
+  border-color: var(--cf-info-status);
+  color: var(--cf-info-status);
+}
+
+.cf-scores-footnote {
+  margin-top: 10px;
+  color: var(--cf-muted);
+  font-size: 0.72rem;
+}
+
+@media (max-width: 560px) {
+  .cf-scores-rows {
+    grid-template-columns: minmax(0, 1fr) 6.5rem;
+  }
+
+  .cf-score-label {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+  }
+
+  .cf-score-note,
+  .cf-score-legend {
+    grid-column: 1 / -1;
+  }
+}
+
 /* -- sections */
 
 .cf-section {
@@ -1416,6 +1673,7 @@ body {
   .cf-figure,
   .cf-metrics,
   .cf-metric,
+  .cf-scores,
   .cf-callout,
   .cf-summary,
   .cf-table-block .cf-caption,
@@ -1477,4 +1735,182 @@ body {
   .cf-changed {
     animation: none;
   }
+}
+
+/* Map of ideas (r.ideas): lines of work as a tree of cards, no script. */
+.cf-ideas {
+  margin: 20px 0;
+  padding: 16px 20px;
+  border: 1.5px solid var(--cf-soft-line);
+  border-radius: 14px;
+  background: var(--cf-card);
+}
+
+.cf-ideas-title {
+  margin: 0;
+  font: 600 1.05rem/1.3 var(--cf-display);
+}
+
+.cf-ideas-subtitle,
+.cf-ideas-summary {
+  margin: 2px 0 0;
+  color: var(--cf-muted);
+  font-size: 0.85rem;
+}
+
+.cf-ideas-tree,
+.cf-ideas-branch {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cf-ideas-tree {
+  margin-top: 12px;
+}
+
+.cf-ideas-branch {
+  margin-left: 14px;
+  padding-left: 14px;
+  border-left: 1.5px solid var(--cf-soft-line);
+}
+
+.cf-ideas-tree > li,
+.cf-ideas-branch > li {
+  margin: 8px 0;
+}
+
+.cf-idea {
+  --cf-idea-color: var(--cf-info-status);
+  padding: 10px 12px;
+  border: 1px solid var(--cf-soft-line);
+  border-left: 4px solid var(--cf-idea-color);
+  border-radius: 10px;
+  break-inside: avoid;
+}
+
+.cf-idea[data-status="done"] { --cf-idea-color: var(--cf-good-status); }
+.cf-idea[data-status="blocked"] { --cf-idea-color: var(--cf-critical-status); }
+.cf-idea[data-status="idea"] { --cf-idea-color: var(--cf-warning-status); }
+.cf-idea[data-status="dropped"] { --cf-idea-color: var(--cf-neutral); }
+
+.cf-idea[data-status="dropped"] .cf-idea-title {
+  color: var(--cf-muted);
+  text-decoration: line-through;
+}
+
+.cf-idea-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.cf-idea-id {
+  color: var(--cf-muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.cf-idea-title {
+  flex: 1 1 auto;
+  font-weight: 600;
+}
+
+.cf-idea-status {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cf-idea-color) 18%, var(--cf-card));
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.cf-idea-meta,
+.cf-idea-needs {
+  margin: 4px 0 0;
+  color: var(--cf-muted);
+  font-size: 0.8rem;
+}
+
+.cf-idea-needs ul,
+.cf-idea-todos,
+.cf-idea-files,
+.cf-idea-comments {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+}
+
+.cf-idea-needs {
+  display: flex;
+  gap: 6px;
+}
+
+.cf-idea-needs ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+}
+
+.cf-idea-needs li[data-met="true"] {
+  text-decoration: line-through;
+}
+
+.cf-idea-todos li {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.cf-idea-box {
+  flex: none;
+  width: 0.8em;
+  height: 0.8em;
+  border: 1.5px solid var(--cf-muted);
+  border-radius: 3px;
+}
+
+.cf-idea-todos li[data-done="true"] {
+  color: var(--cf-muted);
+}
+
+.cf-idea-todos li[data-done="true"] .cf-idea-box {
+  border-color: var(--cf-good-status);
+  background: var(--cf-good-status);
+}
+
+.cf-idea-conclusion {
+  margin-top: 6px;
+  font-size: 0.9rem;
+}
+
+.cf-idea-conclusion p {
+  margin: 4px 0;
+}
+
+.cf-idea-files li code {
+  font-size: 0.8rem;
+}
+
+.cf-idea-comments li {
+  margin-top: 4px;
+  padding-left: 8px;
+  border-left: 2px solid var(--cf-soft-line);
+}
+
+.cf-idea-by {
+  color: var(--cf-muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.cf-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

@@ -14,7 +14,7 @@ __version__ = "0.6.5"
 
 from . import theme  # noqa: E402
 from .interactive import Bar, Box, Histogram, Scatter, Select, Stat, Table, Threshold, Toggle  # noqa: E402
-from .report import Metric, Report  # noqa: E402
+from .report import Metric, Report, ScoreBar, StackedBar  # noqa: E402
 from .theme import palette  # noqa: E402
 
 __all__ = [
@@ -25,7 +25,9 @@ __all__ = [
     "Metric",
     "Report",
     "Scatter",
+    "ScoreBar",
     "Select",
+    "StackedBar",
     "Stat",
     "Table",
     "Threshold",

@@ -502,11 +502,196 @@ def _provenance(node, ctx: Context, depth: int, attrs: str) -> str:
     )
 
 
+def _number(value: float) -> str:
+    return str(int(value)) if float(value).is_integer() else f"{value:.2f}".rstrip("0").rstrip(".")
+
+
+def _score_bar(row: dict[str, Any]) -> str:
+    label = escape(row["label"])
+    value = row.get("value")
+    steps = row.get("steps")
+    status = row.get("status") or "info"
+    if value is None:
+        shown = escape(row.get("display") or "n/a")
+        cells = len(steps) if steps else 0
+        track = "".join('<span class="cf-score-cell"></span>' for _ in range(cells))
+        aria = f"{label}: not applicable"
+        attrs = ' data-na=""'
+    elif steps:
+        reached = int(value)
+        shown = escape(row.get("display") or steps[reached])
+        cells = []
+        for index, step in enumerate(steps):
+            on = " data-on" if index <= reached else ""
+            cells.append(f'<span class="cf-score-cell"{on} title="{escape(step)}"></span>')
+        track = "".join(cells)
+        aria = f"{label}: {escape(steps[reached])} ({reached + 1} of {len(steps)}: {escape(', '.join(steps))})"
+        attrs = f' data-status="{escape(status)}"'
+    else:
+        top = row["max"]
+        share = max(0.0, min(1.0, value / top))
+        shown = escape(row.get("display") or f"{_number(value)} / {_number(top)}")
+        ticks = ""
+        if top <= 10 and float(top).is_integer():
+            ticks = "".join(
+                f'<span class="cf-score-tick" style="left:{100 * step / top:.4g}%"></span>'
+                for step in range(1, int(top))
+            )
+        track = f'<span class="cf-score-fill" style="width:{100 * share:.4g}%"></span>{ticks}'
+        aria = f"{label}: {_number(value)} of {_number(top)}"
+        attrs = f' data-status="{escape(status)}"'
+    kind = "cf-score-steps" if steps else "cf-score-track"
+    note = f'<span class="cf-score-note" title="{escape(row["note"])}">{escape(row["note"])}</span>' if row.get("note") else ""
+    style = f' style="grid-template-columns:repeat({len(steps)},1fr)"' if steps else ""
+    return (
+        f'<div class="cf-score"{attrs}><span class="cf-score-label">{label}</span>'
+        f'<span class="{kind}" role="img" aria-label="{aria}"{style}>{track}</span>'
+        f'<span class="cf-score-value">{shown}</span>{note}</div>'
+    )
+
+
+def _score_stacked(row: dict[str, Any]) -> str:
+    label = escape(row["label"])
+    segments = row["segments"]
+    total = sum(segment["count"] for segment in segments)
+    parts, legend = [], []
+    for segment in segments:
+        name, count, tone = escape(segment["name"]), segment["count"], escape(segment["tone"])
+        if total and count:
+            parts.append(
+                f'<span class="cf-score-segment" data-tone="{tone}" style="flex-grow:{_number(count)}"'
+                f' title="{name}: {_number(count)}"></span>'
+            )
+        zero = "" if count else " data-zero"
+        legend.append(f'<li{zero}><i data-tone="{tone}"></i>{name} <b>{_number(count)}</b></li>')
+    aria = f"{label}: " + ", ".join(f"{escape(s['name'])} {_number(s['count'])}" for s in segments)
+    note = f'<span class="cf-score-note" title="{escape(row["note"])}">{escape(row["note"])}</span>' if row.get("note") else ""
+    empty = "" if total else ' data-na=""'
+    return (
+        f'<div class="cf-score cf-score-stack"{empty}>'
+        f'<span class="cf-score-label">{label}</span>'
+        f'<span class="cf-score-segments" role="img" aria-label="{aria}">{"".join(parts)}</span>'
+        f'<span class="cf-score-value">{_number(total)}</span>'
+        f'<ul class="cf-score-legend">{"".join(legend)}</ul>{note}</div>'
+    )
+
+
+def _scores(node, ctx: Context, depth: int, attrs: str) -> str:
+    head = ""
+    if node.get("title") or node.get("subtitle_html"):
+        title = escape(node.get("title") or "")
+        title = f'<p class="cf-scores-title">{title}</p>' if title else ""
+        subtitle = node.get("subtitle_html")
+        subtitle = f'<div class="cf-scores-subtitle">{ctx.resolve_html(subtitle)}</div>' if subtitle else ""
+        head = f'<header class="cf-scores-head">{title}{subtitle}</header>'
+    rows = "".join(_score_stacked(row) if row["kind"] == "stacked" else _score_bar(row) for row in node["rows"])
+    badges = ""
+    if node.get("badges"):
+        chips = []
+        for badge in node["badges"]:
+            status = f' data-status="{escape(badge["status"])}"' if badge.get("status") else ""
+            chips.append(f'<span class="cf-score-badge"{status}>{escape(badge["label"])}</span>')
+        badges = f'<div class="cf-scores-badges">{"".join(chips)}</div>'
+    footnote = node.get("footnote_html")
+    footnote = f'<div class="cf-scores-footnote">{ctx.resolve_html(footnote)}</div>' if footnote else ""
+    return (
+        f'<div class="cf-block cf-scores"{attrs}>{head}<div class="cf-scores-rows">{rows}</div>{badges}{footnote}</div>'
+    )
+
+
+IDEA_STATUS_LABELS = {"idea": "idea", "active": "in progress", "blocked": "blocked", "done": "done", "dropped": "dropped"}
+
+
+def _idea_card(idea, by_id, also, ctx: Context) -> str:
+    status = idea["status"]
+    head = (
+        f'<header class="cf-idea-head"><span class="cf-idea-id">#{idea["id"]}</span>'
+        f'<span class="cf-idea-title">{escape(idea["title"])}</span>'
+        f'<span class="cf-idea-status" data-status="{escape(status)}">{IDEA_STATUS_LABELS.get(status, escape(status))}</span></header>'
+    )
+    parts = [head]
+    if also:
+        names = ", ".join(f"#{parent}" for parent in also)
+        parts.append(f'<p class="cf-idea-meta">Also builds on {names}</p>')
+    needs = []
+    for need in idea["needs"]:
+        if "idea" in need:
+            other = by_id.get(need["idea"])
+            met = other is not None and other["status"] == "done"
+            label = f"#{need['idea']}" + (f" {escape(other['title'])}" if other else "")
+        else:
+            met, label = need["met"], escape(need["text"])
+        needs.append(f'<li data-met="{str(met).lower()}">{label}</li>')
+    if needs:
+        parts.append(f'<div class="cf-idea-needs"><span>Needs</span><ul>{"".join(needs)}</ul></div>')
+    if idea["todos"]:
+        todos = "".join(
+            f'<li data-done="{str(todo["done"]).lower()}"><span class="cf-idea-box" aria-hidden="true"></span>'
+            f'<span class="cf-visually-hidden">{"done: " if todo["done"] else "to do: "}</span>{escape(todo["text"])}</li>'
+            for todo in idea["todos"]
+        )
+        done = sum(todo["done"] for todo in idea["todos"])
+        parts.append(f'<ul class="cf-idea-todos" aria-label="Todos, {done} of {len(idea["todos"])} done">{todos}</ul>')
+    if idea.get("conclusion_html"):
+        parts.append(f'<div class="cf-idea-conclusion cf-text">{ctx.resolve_html(idea["conclusion_html"])}</div>')
+    if idea["files"]:
+        files = "".join(f"<li><code>{escape(file)}</code></li>" for file in idea["files"])
+        parts.append(f'<ul class="cf-idea-files">{files}</ul>')
+    if idea["comments"]:
+        comments = "".join(
+            f'<li><span class="cf-idea-by">{escape(c["by"] or "comment")}</span> {escape(c["text"])}</li>'
+            for c in idea["comments"]
+        )
+        parts.append(f'<ul class="cf-idea-comments">{comments}</ul>')
+    return f'<article class="cf-idea" data-status="{escape(status)}">{"".join(parts)}</article>'
+
+
+def _ideas(node, ctx: Context, depth: int, attrs: str) -> str:
+    ideas = node["ideas"]
+    by_id = {idea["id"]: idea for idea in ideas}
+    # Each idea sits under the first idea it builds on, as codeflower-roots tree shows it; the others are named.
+    children: dict[int, list[dict]] = {}
+    origins = []
+    for idea in ideas:
+        parents = [parent for parent in idea["from"] if parent in by_id]
+        if parents:
+            children.setdefault(parents[0], []).append(idea)
+        else:
+            origins.append(idea)
+    shown: set[int] = set()
+
+    def branch(idea) -> str:
+        shown.add(idea["id"])
+        parents = [parent for parent in idea["from"] if parent in by_id]
+        kids = "".join(branch(kid) for kid in children.get(idea["id"], []))
+        nested = f'<ul class="cf-ideas-branch">{kids}</ul>' if kids else ""
+        return f"<li>{_idea_card(idea, by_id, parents[1:], ctx)}{nested}</li>"
+
+    tree = "".join(branch(origin) for origin in origins)
+    # Ideas that build on each other in a circle have no origin: shown after the tree.
+    rest = "".join(f"<li>{_idea_card(idea, by_id, [], ctx)}</li>" for idea in ideas if idea["id"] not in shown)
+    head = ""
+    if node.get("title") or node.get("subtitle_html"):
+        title = f'<p class="cf-ideas-title">{escape(node["title"])}</p>' if node.get("title") else ""
+        subtitle = node.get("subtitle_html")
+        subtitle = f'<div class="cf-ideas-subtitle">{ctx.resolve_html(subtitle)}</div>' if subtitle else ""
+        head = f'<header class="cf-ideas-head">{title}{subtitle}</header>'
+    counts = {}
+    for idea in ideas:
+        counts[idea["status"]] = counts.get(idea["status"], 0) + 1
+    summary = " · ".join(f"{counts[status]} {label}" for status, label in IDEA_STATUS_LABELS.items() if counts.get(status))
+    summary = f'<p class="cf-ideas-summary">{len(ideas)} idea{"" if len(ideas) == 1 else "s"}: {summary}</p>' if ideas else '<p class="cf-ideas-summary">No ideas yet.</p>'
+    body = f'<ul class="cf-ideas-tree">{tree}{rest}</ul>' if ideas else ""
+    return f'<div class="cf-block cf-ideas"{attrs}>{head}{summary}{body}</div>'
+
+
 RENDERERS: dict[str, Callable[..., str]] = {
     "section": _section,
     "text": _text,
     "summary": _summary,
     "metrics": _metrics,
+    "scores": _scores,
+    "ideas": _ideas,
     "figure": _figure,
     "table": _table,
     "callout": _callout,
