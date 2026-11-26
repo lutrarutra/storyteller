@@ -6,12 +6,26 @@ the print styles give the same result.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 INSTALL_HINT = (
     "PDF export needs playwright with Chromium: `uv pip install playwright && playwright install chromium`. "
     "Without it, open the report in a browser and use Print / PDF."
 )
+
+
+def launch_options(environ=os.environ) -> dict:
+    """How to start Chromium: code flower's sandbox has its own (`CODEFLOWER_BROWSER_BIN`, installed by
+    `codeflower-browser install`), which runs without Chromium's own sandbox inside the container."""
+    binary = environ.get("CODEFLOWER_BROWSER_BIN")
+    if not binary:
+        return {}
+    if not Path(binary).is_file():
+        raise RuntimeError(
+            f"CODEFLOWER_BROWSER_BIN is {binary}, which is not there yet: run `codeflower-browser install`."
+        )
+    return {"executable_path": binary, "args": ["--no-sandbox"]}
 
 
 def to_pdf(html_path: str | Path, pdf_path: str | Path | None = None, *, page: str | None = None) -> Path:
@@ -21,9 +35,10 @@ def to_pdf(html_path: str | Path, pdf_path: str | Path | None = None, *, page: s
         raise RuntimeError(INSTALL_HINT) from error
     html_path = Path(html_path).resolve()
     pdf_path = Path(pdf_path) if pdf_path else html_path.with_suffix(".pdf")
+    options = launch_options()
     with sync_playwright() as playwright:
         try:
-            browser = playwright.chromium.launch()
+            browser = playwright.chromium.launch(**options)
         except Exception as error:  # browser binaries missing
             raise RuntimeError(f"{error}\n{INSTALL_HINT}") from error
         try:
@@ -38,10 +53,10 @@ def to_pdf(html_path: str | Path, pdf_path: str | Path | None = None, *, page: s
             tab.emulate_media(media="print")
             tab.evaluate("window.dispatchEvent(new Event('beforeprint'))")
             tab.wait_for_timeout(300)
-            options = {"path": str(pdf_path), "print_background": True, "prefer_css_page_size": True}
+            printing = {"path": str(pdf_path), "print_background": True, "prefer_css_page_size": True}
             if page:
-                options["format"] = page
-            tab.pdf(**options)
+                printing["format"] = page
+            tab.pdf(**printing)
         finally:
             browser.close()
     return pdf_path
