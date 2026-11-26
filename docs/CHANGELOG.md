@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.1
+
+- `storyteller pdf` prints with code flower's own Chromium in the sandbox (`CODEFLOWER_BROWSER_BIN`), so
+  an audit can seal its report as a PDF.
+
 ## 0.7.0
 
 - `r.scores()` draws a scorecard: one bar per row on a fixed scale, ordinal steps, stacked counts, n/a
